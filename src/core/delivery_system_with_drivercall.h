@@ -3,7 +3,7 @@
 
 #include "delivery_system.h"
 
-class DeliverySystemWithDriverCall : public DeliverySystem {
+class DeliverySystemWithDriverCall : DeliverySystem {
 public:
     DeliverySystemWithDriverCall();
     ~DeliverySystemWithDriverCall();

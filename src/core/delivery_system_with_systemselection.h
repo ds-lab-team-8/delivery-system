@@ -3,7 +3,7 @@
 
 #include "delivery_system.h"
 
-class DeliverySystemWithSystemSelection : public DeliverySystem {
+class DeliverySystemWithSystemSelection : DeliverySystem {
 public:
     DeliverySystemWithSystemSelection();
     ~DeliverySystemWithSystemSelection();
