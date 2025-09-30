@@ -7,9 +7,6 @@ using namespace std;
 
 class Location {
     public:
-        int x;
-        int y;
-
         Location();
         Location(int x, int y);
         ~Location();
@@ -19,14 +16,16 @@ class Location {
         int getY() const;
 
         // Setters
-        void setX(int x);
-        void setY(int y);
-        void setLocation(int x, int y);
+        void updateLocation(int x, int y);
 
         // Utility methods
-        void displayLocation() const;
+        double calculateDistance(const Location& other) const;
         bool operator==(const Location& other) const;
         bool operator!=(const Location& other) const;
+
+    private:
+        int x;
+        int y;
 };
 
 #endif
