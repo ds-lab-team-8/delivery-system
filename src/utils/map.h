@@ -7,30 +7,51 @@
 
 using namespace std;
 
+
+enum ItemType {
+    ORDERER,
+    DRIVER,
+    STORE
+};
+
+
+class MapItem {
+public:
+    MapItem(const Location& location, ItemType itemType, int id);
+    ~MapItem();
+
+    Location getLocation() const;
+    ItemType getItemType() const;
+    int getId() const;
+    
+    void setLocation(const Location& newLocation);
+
+private:
+    Location location;
+    ItemType itemType;
+    int id;
+};
+
+
 class Map {
-    public:
-        Map(int width, int height);
-        ~Map();
+public:
+    Map(int width, int height);
+    ~Map();
 
-        // Map management
-        void initializeMap();
-        void displayMap() const;
-        void updatePersonLocation(int personId, const Location& location);
+    void addItem(const MapItem& item);
+    vector<MapItem> getAllItems() const;
 
-        // Distance calculations
-        double calculateDistance(const Location& a, const Location& b) const;
+    // Getters
+    int getWidth() const;
+    int getHeight() const;
 
-        // Map validation
-        bool isValidLocation(const Location& location) const;
+private:
+    int width;
+    int height;
+    vector<MapItem> items;
 
-        // Getters
-        int getWidth() const;
-        int getHeight() const;
+    // 추가로 그래프 가중치 정보 및 최단 거리 정보 등이 필요한 경우 선언하여 사용
 
-    private:
-        int width;
-        int height;
-        vector<Location> personLocations;  // Track locations of people (orderers, stores, drivers)
 };
 
 #endif
