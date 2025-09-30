@@ -20,7 +20,7 @@ public:
     void simulateWithUserInput();
 
 private:
-    DeliverySystem* deliverySystem;
+    DeliverySystem deliverySystem;
 };
 
 #endif
