@@ -20,19 +20,14 @@ class Driver {
         int getId() const;
         string getName() const;
         Location getCurrentLocation() const;
-        queue<Order*> getOrderQueue() const;
 
         // Location management
         void updateLocation(const Location& newLocation);
-        // void moveTowards(const Location& destination);
 
         // Order management methods
-        void receiveOrder(Order* order);
-        void viewAvailableOrders(DeliverySystem* system);
+        void addOrder(Order* order);
         void acceptOrder(int orderId, DeliverySystem* system);
         void completeDelivery(int orderId);
-        bool hasOrdersInQueue() const;
-        void displayOrderQueue() const;
 
     private:
         int id;
