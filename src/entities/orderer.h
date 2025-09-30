@@ -7,26 +7,20 @@
 
 using namespace std;
 
-class Order;
-class DeliverySystem;
-
 class Orderer {
     public:
-        Orderer(int id, const string& name, const Location& address);
+        Orderer(int id, const string& name, const Location& location);
         ~Orderer();
 
         // Getters
         int getId() const;
         string getName() const;
-        Location getAddress() const;
-
-        // Methods
-        void placeOrder(DeliverySystem* system, int storeId);
+        Location getLocation() const;
 
     private:
         int id;
         string name;
-        Location address;
+        Location location;
 };
 
 #endif
