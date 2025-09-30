@@ -18,7 +18,7 @@ enum OrderStatus {
 
 class Order {
     public:
-        Order(int orderId, int ordererId, int storeId, const Location& deliveryAddress, const string& orderDetails);
+        Order(int orderId, int ordererId, int storeId, const Location& deliveryLocation);
         ~Order();
 
         // Getters
@@ -26,30 +26,24 @@ class Order {
         int getOrdererId() const;
         int getStoreId() const;
         int getDriverId() const;
-        Location getDeliveryAddress() const;
+        Location getDeliveryLocation() const;
         OrderStatus getStatus() const;
 
-        // Setters
-        // void setDriverId(int driverId);
-        // void setStatus(OrderStatus status);
-
         // Order status management
-        void acceptOrder();
-        void assignDriver(int driverId);
-        void completePickup();
-        void completeDelivery();
+        void acceptOrder();                     // 주문 수락 (상태 변경)
+        void assignDriver(int driverId);        // 기사 할당 (상태 변경 및 driverId 지정)
+        void completePickup();                  // 픽업 완료 (상태 변경)
+        void completeDelivery();                // 배달 완료 (상태 변경)
 
         // Utility methods
-        string getStatusString() const;
-        void displayOrderInfo() const;
-        bool isCompleted() const;
+        bool isDeliveryCompleted() const;       // 배달 완료 여부 확인
 
     private:
         int orderId;
         int ordererId;
         int storeId;
         int driverId;
-        Location deliveryAddress;
+        Location deliveryLocation;
         OrderStatus status;
 };
 
