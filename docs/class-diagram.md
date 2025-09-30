@@ -1,51 +1,26 @@
-# 배달 시스템 클래스 다이어그램
-
-## Mermaid 클래스 다이어그램
-
 ```mermaid
 classDiagram
-    %% Core System Classes
-    class Simulator {
-        -DeliverySystem* deliverySystem
-        -Map* map
-        -bool simulationRunning
-        -int simulationStep
-        +initializeSystem()
-        +startSimulation()
-        +runSimulationStep()
-        +addOrderer(id, name, x, y)
-        +addStore(id, name, x, y)
-        +addDriver(id, name, x, y)
-        +processUserCommand()
+    class Location {
+        -int x
+        -int y
+        +Location()
+        +Location(int x, int y)
+        +getX() int
+        +getY() int
+        +updateLocation(int x, int y) void
+        +calculateDistance(Location other) double
+        +operator==(Location other) bool
+        +operator!=(Location other) bool
     }
 
-    class DeliverySystem {
-        -Map map
-        -vector~Orderer~ orderers
-        -vector~Driver~ drivers
-        -vector~Store~ stores
-        -vector~Order*~ orders
-        -queue~Order*~ ordersWaitingStore
-        -queue~Order*~ ordersWaitingDriver
-        -int nextOrderId
-        +addOrderer(orderer)
-        +addStore(store)
-        +addDriver(driver)
-        +processNewOrder(ordererId, storeId, orderDetails)
-        +findOptimalDriver(order)
-        +optimizeMultipleDeliveries(driverId)
-        +calculateDeliveryDistance(store, customer, driverPos)
-    }
-
-    %% Entity Classes
     class Orderer {
         -int id
         -string name
-        -Location address
-        +getId()
-        +getName()
-        +getAddress()
-        +placeOrder(system, storeId)
+        -Location location
+        +Orderer(int id, string name, Location location)
+        +getId() int
+        +getName() string
+        +getLocation() Location
     }
 
     class Store {
@@ -53,13 +28,17 @@ classDiagram
         -string name
         -Location location
         -queue~Order*~ orderQueue
-        +getId()
-        +getName()
-        +getLocation()
-        +receiveOrder(order)
-        +processNextOrder()
-        +requestDriverCall(system)
-        +hasOrdersWaiting()
+        +Store(int id, string name, Location location)
+        +getId() int
+        +getName() string
+        +getLocation() Location
+        +getOrderQueue() queue~Order*~
+        +receiveOrder(Order* order) void
+        +processNextOrder() Order*
+        +requestDriverCall(DeliverySystem* system) void
+        +setPickupComplete(int orderId) void
+        +hasOrdersWaiting() bool
+        +displayOrderQueue() void
     }
 
     class Driver {
@@ -68,14 +47,14 @@ classDiagram
         -Location currentLocation
         -queue~Order*~ orderQueue
         -bool available
-        +getId()
-        +getName()
-        +getCurrentLocation()
-        +updateLocation(newLocation)
-        +receiveOrder(order)
-        +acceptOrder(orderId, system)
-        +completeDelivery(orderId)
-        +hasOrdersInQueue()
+        +Driver(int id, string name, Location initialLocation)
+        +getId() int
+        +getName() string
+        +getCurrentLocation() Location
+        +updateLocation(Location newLocation) void
+        +addOrder(Order* order) void
+        +acceptOrder(int orderId, DeliverySystem* system) void
+        +completeDelivery(int orderId) void
     }
 
     class Order {
@@ -83,49 +62,22 @@ classDiagram
         -int ordererId
         -int storeId
         -int driverId
-        -Location deliveryAddress
+        -Location deliveryLocation
         -OrderStatus status
-        +getOrderId()
-        +getOrdererId()
-        +getStoreId()
-        +getDriverId()
-        +getDeliveryAddress()
-        +getStatus()
-        +acceptOrder()
-        +assignDriver(driverId)
-        +completePickup()
-        +completeDelivery()
-        +isCompleted()
+        +Order(int orderId, int ordererId, int storeId, Location deliveryLocation)
+        +getOrderId() int
+        +getOrdererId() int
+        +getStoreId() int
+        +getDriverId() int
+        +getDeliveryLocation() Location
+        +getStatus() OrderStatus
+        +acceptOrder() void
+        +assignDriver(int driverId) void
+        +completePickup() void
+        +completeDelivery() void
+        +isDeliveryCompleted() bool
     }
 
-    %% Utility Classes
-    class Location {
-        +int x
-        +int y
-        +getX()
-        +getY()
-        +setX(x)
-        +setY(y)
-        +setLocation(x, y)
-        +displayLocation()
-        +operator==(other)
-        +operator!=(other)
-    }
-
-    class Map {
-        -int width
-        -int height
-        -vector~Location~ personLocations
-        +initializeMap()
-        +displayMap()
-        +updatePersonLocation(personId, location)
-        +calculateDistance(a, b)
-        +isValidLocation(location)
-        +getWidth()
-        +getHeight()
-    }
-
-    %% Enums
     class OrderStatus {
         <<enumeration>>
         ORDER_REQUESTED
@@ -135,68 +87,82 @@ classDiagram
         DELIVERY_COMPLETE
     }
 
-    class SimulationCommand {
-        <<enumeration>>
-        ADD_ORDERER
-        ADD_STORE
-        ADD_DRIVER
-        PLACE_ORDER
-        VIEW_STATUS
-        VIEW_DRIVER_STATUS
-        VIEW_STORE_STATUS
-        RUN_SIMULATION_STEP
-        EXIT_SIMULATION
+    class MapItem {
+        -Location location
+        -ItemType itemType
+        -int id
+        +MapItem(Location location, ItemType itemType, int id)
+        +getLocation() Location
+        +getItemType() ItemType
+        +getId() int
+        +setLocation(Location newLocation) void
     }
 
-    %% Relationships
-    Simulator "1" *-- "1" DeliverySystem : contains
-    Simulator "1" *-- "1" Map : contains
+    class ItemType {
+        <<enumeration>>
+        ORDERER
+        DRIVER
+        STORE
+    }
 
-    DeliverySystem "1" *-- "1" Map : contains
-    DeliverySystem "1" *-- "*" Orderer : manages
-    DeliverySystem "1" *-- "*" Store : manages
-    DeliverySystem "1" *-- "*" Driver : manages
-    DeliverySystem "1" *-- "*" Order : manages
+    class Map {
+        -int width
+        -int height
+        -vector~MapItem~ items
+        +Map(int width, int height)
+        +addItem(MapItem item) void
+        +getAllItems() vector~MapItem~
+        +getWidth() int
+        +getHeight() int
+    }
 
-    Orderer "1" *-- "1" Location : has address
-    Store "1" *-- "1" Location : has location
-    Store "1" o-- "*" Order : queues
-    Driver "1" *-- "1" Location : has current location
-    Driver "1" o-- "*" Order : delivers
-    Order "1" *-- "1" Location : has delivery address
-    Order "1" -- "1" OrderStatus : has status
+    class DeliverySystem {
+        -Map map
+        -vector~Orderer~ orderers
+        -vector~Driver~ drivers
+        -vector~Store~ stores
+        -vector~Order*~ orders
+        +DeliverySystem()
+        +addOrderer(Orderer orderer) void
+        +addStore(Store store) void
+        +addDriver(Driver driver) void
+        +addOrder(Order order) void
+        +requestCallsToDrivers() void
+        +acceptCall(int orderId) void
+        +completePickup(int orderId) void
+        +completeDelivery(int orderId) void
+    }
 
-    Map "1" *-- "*" Location : tracks positions
+    class DeliverySystemWithSystemSelection {
+        +DeliverySystemWithSystemSelection()
+    }
 
-    %% Dependencies
-    Orderer ..> DeliverySystem : uses
-    Store ..> DeliverySystem : uses
-    Driver ..> DeliverySystem : uses
-    Simulator ..> SimulationCommand : uses
+    class DeliverySystemWithDriverCall {
+        +DeliverySystemWithDriverCall()
+    }
+
+    class Simulator {
+        -DeliverySystem deliverySystem
+        +Simulator()
+        +simulateWithUserInput() void
+    }
+
+    Orderer o-- Location
+    Store o-- Location
+    Driver o-- Location
+    Order o-- Location
+    Order --> OrderStatus
+    MapItem o-- Location
+    MapItem --> ItemType
+    Map o-- MapItem
+    Store o-- Order
+    Driver o-- Order
+    DeliverySystem o-- Map
+    DeliverySystem o-- Orderer
+    DeliverySystem o-- Driver
+    DeliverySystem o-- Store
+    DeliverySystem o-- Order
+    DeliverySystemWithSystemSelection --|> DeliverySystem
+    DeliverySystemWithDriverCall --|> DeliverySystem
+    Simulator o-- DeliverySystem
 ```
-
-## 클래스 관계 설명
-
-### 핵심 시스템 클래스
-- **Simulator**: 전체 시뮬레이션을 관리하는 메인 클래스
-- **DeliverySystem**: 배달 시스템의 핵심 로직을 담당하는 클래스
-
-### 엔티티 클래스
-- **Orderer**: 주문자를 나타내는 클래스
-- **Store**: 상점을 나타내는 클래스
-- **Driver**: 배달 기사를 나타내는 클래스
-- **Order**: 주문을 나타내는 클래스
-
-### 유틸리티 클래스
-- **Location**: 2D 좌표를 나타내는 클래스
-- **Map**: 지도 관리 및 거리 계산을 담당하는 클래스
-
-### 열거형
-- **OrderStatus**: 주문 상태를 나타내는 열거형
-- **SimulationCommand**: 시뮬레이션 명령을 나타내는 열거형
-
-### 주요 관계
-1. **Composition (집합)**: Simulator는 DeliverySystem과 Map을 포함
-2. **Aggregation (연관)**: Store와 Driver는 Order 큐를 가짐
-3. **Association (연관)**: 각 엔티티는 Location을 가짐
-4. **Dependency (의존)**: 엔티티들은 DeliverySystem을 사용
