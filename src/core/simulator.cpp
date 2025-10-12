@@ -26,10 +26,9 @@ struct OrderStats {
                    deliveryDistance(0.0), totalTime(0.0) {}
 };
 
-Simulator::Simulator() : useRealImplementation(false) {
-    // useRealImplementation을 false로 초기화 (Mock 모드)
-    // 실제 DeliverySystem 구현이 완료되면 true로 변경
-}
+Simulator::Simulator() : useRealImplementation(false), 
+                         nextOrdererId(1), nextDriverId(1), 
+                         nextStoreId(1), nextOrderId(1) {}
 
 Simulator::~Simulator() {
     // 동적 할당된 Order 객체들 삭제
@@ -65,14 +64,14 @@ void Simulator::simulateWithUserInput() {
         iss >> cmd;
 
         if (cmd == "add_orderer") {
-            int id, x, y;
+            int x, y;
             string name;
-            iss >> id >> name >> x >> y;
+            iss >> name >> x >> y;
 
+            int id = nextOrdererId++;
             Location loc(x, y);
             Orderer orderer(id, name, loc);
 
-            // 실제 구현이 완료되면 사용
             if (useRealImplementation) {
                 deliverySystem.addOrderer(orderer);
             }
@@ -83,14 +82,14 @@ void Simulator::simulateWithUserInput() {
                  << ", 위치: (" << x << ", " << y << ")" << endl;
 
         } else if (cmd == "add_driver") {
-            int id, x, y;
+            int x, y;
             string name;
-            iss >> id >> name >> x >> y;
+            iss >> name >> x >> y;
 
+            int id = nextDriverId++;
             Location loc(x, y);
             Driver driver(id, name, loc);
 
-            // 실제 구현이 완료되면 사용
             if (useRealImplementation) {
                 deliverySystem.addDriver(driver);
             }
@@ -101,14 +100,14 @@ void Simulator::simulateWithUserInput() {
                  << ", 위치: (" << x << ", " << y << ")" << endl;
 
         } else if (cmd == "add_store") {
-            int id, x, y;
+            int x, y;
             string name;
-            iss >> id >> name >> x >> y;
+            iss >> name >> x >> y;
 
+            int id = nextStoreId++;
             Location loc(x, y);
             Store store(id, name, loc);
 
-            // 실제 구현이 완료되면 사용
             if (useRealImplementation) {
                 deliverySystem.addStore(store);
             }
@@ -119,13 +118,13 @@ void Simulator::simulateWithUserInput() {
                  << ", 위치: (" << x << ", " << y << ")" << endl;
 
         } else if (cmd == "add_order") {
-            int orderId, ordererId, storeId, x, y;
-            iss >> orderId >> ordererId >> storeId >> x >> y;
+            int ordererId, storeId, x, y;
+            iss >> ordererId >> storeId >> x >> y;
 
+            int orderId = nextOrderId++;
             Location deliveryLoc(x, y);
             Order* order = new Order(orderId, ordererId, storeId, deliveryLoc);
 
-            // 실제 구현이 완료되면 사용
             if (useRealImplementation) {
                 deliverySystem.addOrder(*order);
             }
@@ -490,14 +489,14 @@ void Simulator::printSeparator() {
 void Simulator::printHelp() {
     cout << "\n명령어:" << endl;
     printSeparator();
-    cout << "  add_orderer <id> <name> <x> <y>" << endl;
-    cout << "    - 주문자를 추가합니다." << endl;
-    cout << "  add_driver <id> <name> <x> <y>" << endl;
-    cout << "    - 기사를 추가합니다." << endl;
-    cout << "  add_store <id> <name> <x> <y>" << endl;
-    cout << "    - 매장을 추가합니다." << endl;
-    cout << "  add_order <orderId> <ordererId> <storeId> <deliveryX> <deliveryY>" << endl;
-    cout << "    - 주문을 추가합니다." << endl;
+    cout << "  add_orderer <name> <x> <y>" << endl;
+    cout << "    - 주문자를 추가합니다. (ID는 자동 생성)" << endl;
+    cout << "  add_driver <name> <x> <y>" << endl;
+    cout << "    - 기사를 추가합니다. (ID는 자동 생성)" << endl;
+    cout << "  add_store <name> <x> <y>" << endl;
+    cout << "    - 매장을 추가합니다. (ID는 자동 생성)" << endl;
+    cout << "  add_order <ordererId> <storeId> <deliveryX> <deliveryY>" << endl;
+    cout << "    - 주문을 추가합니다. (주문 ID는 자동 생성)" << endl;
     cout << "  start" << endl;
     cout << "    - 시뮬레이션을 시작합니다." << endl;
     cout << "  help" << endl;
