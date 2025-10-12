@@ -27,6 +27,28 @@ struct OrderStats {
                    deliveryDistance(0.0), totalTime(0.0) {}
 };
 
+enum EventType {
+    EVENT_ORDER_ASSIGNED,
+    EVENT_PICKUP_COMPLETE,
+    EVENT_DELIVERY_COMPLETE
+};
+
+struct Event {
+    double time;
+    EventType type;
+    int orderId;
+    int driverId;
+    Location location;
+    double distance;
+
+    Event(double t, EventType et, int oid, int did, Location loc, double dist = 0.0)
+        : time(t), type(et), orderId(oid), driverId(did), location(loc), distance(dist) {}
+
+    bool operator<(const Event& other) const {
+        return time < other.time;
+    }
+};
+
 Simulator::Simulator() : useRealImplementation(false), 
                          nextOrdererId(1), nextDriverId(1), 
                          nextStoreId(1), nextOrderId(1) {}
@@ -413,156 +435,171 @@ void Simulator::runSimulation() {
     cout << "시뮬레이션 진행" << endl;
     printSeparator();
 
+    const double SPEED = 1.0;
+
     // 통계 데이터 초기화
     map<int, DriverStats> driverStats;
     map<int, OrderStats> orderStats;
+    map<int, Location> driverLocations;
+    map<int, double> driverAvailableTime;
 
     for (const Driver& driver : drivers) {
         driverStats[driver.getId()] = DriverStats();
+        driverLocations[driver.getId()] = driver.getCurrentLocation();
+        driverAvailableTime[driver.getId()] = 0.0;
     }
 
-    double currentTime = 0.0;
-    const double SPEED = 1.0;  // 1 거리 단위당 1초 (시뮬레이션 속도)
-
-    // 배차 요청 (실제 구현이 완료되면 사용)
+    // 배차 요청
     if (useRealImplementation) {
         deliverySystem.requestCallsToDrivers();
     }
 
-    cout << "\n[시간: " << fixed << setprecision(1) << currentTime
-         << "초] 모든 주문이 기사들에게 배차 요청되었습니다.\n" << endl;
+    cout << "\n[시간: 0.0초] 모든 주문이 기사들에게 배차 요청되었습니다.\n" << endl;
 
-    // 각 기사의 현재 위치 추적
-    map<int, Location> driverLocations;
-    for (const Driver& driver : drivers) {
-        driverLocations[driver.getId()] = driver.getCurrentLocation();
+    // 이벤트 큐 생성
+    vector<Event> events;
+    map<int, Store*> storeMap;
+    map<int, string> driverNames;
+
+    // 매장 맵 생성
+    for (Store& store : stores) {
+        storeMap[store.getId()] = &store;
     }
 
-    // 주문별로 시뮬레이션 진행
+    // 기사 이름 맵 생성
+    for (const Driver& driver : drivers) {
+        driverNames[driver.getId()] = driver.getName();
+    }
+
+    // 시간 0에 모든 주문에 대해 가장 빠르게 처리 가능한 기사 배정
     for (Order* order : orders) {
-        cout << "------------------------------------" << endl;
-        cout << "[주문 #" << order->getOrderId() << " 처리 시작]" << endl;
+        Store* targetStore = storeMap[order->getStoreId()];
+        if (!targetStore) continue;
 
-        // 매장 찾기
-        Store* targetStore = nullptr;
-        for (Store& store : stores) {
-            if (store.getId() == order->getStoreId()) {
-                targetStore = &store;
-                break;
-            }
-        }
-
-        if (!targetStore) {
-            cout << "매장을 찾을 수 없습니다. 주문을 건너뜁니다." << endl;
-            continue;
-        }
-
-        // 가장 가까운 기사 찾기
-        int nearestDriverId = -1;
-        double minDistance = -1;
         Location storeLocation = targetStore->getLocation();
+        
+        // 가장 빠르게 도착 가능한 기사 찾기
+        int bestDriverId = -1;
+        double earliestArrival = -1;
 
-        for (const auto& pair : driverLocations) {
+        for (const auto& pair : driverAvailableTime) {
             int driverId = pair.first;
-            Location driverLoc = pair.second;
+            double availableTime = pair.second;
+            Location driverLoc = driverLocations[driverId];
             double distance = driverLoc.calculateDistance(storeLocation);
+            double arrivalTime = availableTime + distance / SPEED;
 
-            if (minDistance < 0 || distance < minDistance) {
-                minDistance = distance;
-                nearestDriverId = driverId;
+            if (earliestArrival < 0 || arrivalTime < earliestArrival) {
+                earliestArrival = arrivalTime;
+                bestDriverId = driverId;
             }
         }
 
-        if (nearestDriverId == -1) {
-            cout << "배차 가능한 기사가 없습니다." << endl;
-            continue;
-        }
+        if (bestDriverId == -1) continue;
 
         // 기사 배정
-        order->assignDriver(nearestDriverId);
-
-        // 실제 구현이 완료되면 사용
+        order->assignDriver(bestDriverId);
         if (useRealImplementation) {
             deliverySystem.acceptCall(order->getOrderId());
         }
 
-        // 기사 이름 찾기
-        string driverName;
-        for (const Driver& driver : drivers) {
-            if (driver.getId() == nearestDriverId) {
-                driverName = driver.getName();
-                break;
-            }
-        }
-
-        cout << "[시간: " << fixed << setprecision(1) << currentTime
-             << "초] 기사 #" << nearestDriverId << " (" << driverName
-             << ")이(가) 주문을 수락했습니다." << endl;
-
-        // 매장으로 이동
-        double pickupDistance = minDistance;
+        // 픽업 거리 및 시간 계산
+        Location currentDriverLoc = driverLocations[bestDriverId];
+        double pickupDistance = currentDriverLoc.calculateDistance(storeLocation);
         double pickupTime = pickupDistance / SPEED;
-        currentTime += pickupTime;
+        double pickupCompleteTime = driverAvailableTime[bestDriverId] + pickupTime;
 
-        cout << "[시간: " << fixed << setprecision(1) << currentTime
-             << "초] 기사가 매장 #" << targetStore->getId()
-             << " (" << targetStore->getName() << ")에 도착했습니다. (거리: "
-             << fixed << setprecision(2) << pickupDistance << ")" << endl;
-
-        // 픽업 완료
-        order->completePickup();
-
-        // 실제 구현이 완료되면 사용
-        if (useRealImplementation) {
-            deliverySystem.completePickup(order->getOrderId());
-        }
-
-        driverLocations[nearestDriverId] = storeLocation;
-
-        cout << "[시간: " << fixed << setprecision(1) << currentTime
-             << "초] 픽업이 완료되었습니다." << endl;
-
-        // 배달지로 이동
+        // 배달 거리 및 시간 계산
         Location deliveryLocation = order->getDeliveryLocation();
         double deliveryDistance = storeLocation.calculateDistance(deliveryLocation);
         double deliveryTime = deliveryDistance / SPEED;
-        currentTime += deliveryTime;
+        double deliveryCompleteTime = pickupCompleteTime + deliveryTime;
 
-        cout << "[시간: " << fixed << setprecision(1) << currentTime
-             << "초] 기사가 배달지에 도착했습니다. (거리: "
-             << fixed << setprecision(2) << deliveryDistance << ")" << endl;
+        // 이벤트 생성
+        events.push_back(Event(driverAvailableTime[bestDriverId], EVENT_ORDER_ASSIGNED, 
+                              order->getOrderId(), bestDriverId, currentDriverLoc));
+        events.push_back(Event(pickupCompleteTime, EVENT_PICKUP_COMPLETE, 
+                              order->getOrderId(), bestDriverId, storeLocation, pickupDistance));
+        events.push_back(Event(deliveryCompleteTime, EVENT_DELIVERY_COMPLETE, 
+                              order->getOrderId(), bestDriverId, deliveryLocation, deliveryDistance));
 
-        // 배달 완료
-        order->completeDelivery();
+        // 기사의 다음 가용 시간 업데이트
+        driverAvailableTime[bestDriverId] = deliveryCompleteTime;
+        driverLocations[bestDriverId] = deliveryLocation;
 
-        // 실제 구현이 완료되면 사용
-        if (useRealImplementation) {
-            deliverySystem.completeDelivery(order->getOrderId());
-        }
-
-        driverLocations[nearestDriverId] = deliveryLocation;
-
-        cout << "[시간: " << fixed << setprecision(1) << currentTime
-             << "초] 배달이 완료되었습니다!" << endl;
-
-        // 통계 수집
-        driverStats[nearestDriverId].deliveryCount++;
-        driverStats[nearestDriverId].totalDistance += (pickupDistance + deliveryDistance);
-        driverStats[nearestDriverId].completedOrders.push_back(order->getOrderId());
-
+        // 통계 데이터 준비
         OrderStats oStats;
         oStats.orderId = order->getOrderId();
-        oStats.driverId = nearestDriverId;
+        oStats.driverId = bestDriverId;
         oStats.pickupDistance = pickupDistance;
         oStats.deliveryDistance = deliveryDistance;
         oStats.totalTime = pickupTime + deliveryTime;
         orderStats[order->getOrderId()] = oStats;
+
+        driverStats[bestDriverId].deliveryCount++;
+        driverStats[bestDriverId].totalDistance += (pickupDistance + deliveryDistance);
+        driverStats[bestDriverId].completedOrders.push_back(order->getOrderId());
     }
 
+    // 이벤트를 시간순으로 정렬
+    sort(events.begin(), events.end());
+
+    // 이벤트 처리 및 출력
+    for (const Event& event : events) {
+        Order* currentOrder = nullptr;
+        
+        switch (event.type) {
+            case EVENT_ORDER_ASSIGNED:
+                cout << "[시간: " << fixed << setprecision(1) << event.time
+                     << "초] 기사 #" << event.driverId << " (" << driverNames[event.driverId]
+                     << ")이(가) 주문 #" << event.orderId << "을(를) 수락했습니다." << endl;
+                break;
+
+            case EVENT_PICKUP_COMPLETE:
+                for (Order* o : orders) {
+                    if (o->getOrderId() == event.orderId) {
+                        currentOrder = o;
+                        break;
+                    }
+                }
+                if (currentOrder) {
+                    currentOrder->completePickup();
+                    if (useRealImplementation) {
+                        deliverySystem.completePickup(event.orderId);
+                    }
+                    Store* store = storeMap[currentOrder->getStoreId()];
+                    cout << "[시간: " << fixed << setprecision(1) << event.time
+                         << "초] 기사 #" << event.driverId << "이(가) 매장 #" << store->getId()
+                         << " (" << store->getName() << ")에서 주문 #" << event.orderId
+                         << " 픽업 완료 (거리: " << fixed << setprecision(2) << event.distance << ")" << endl;
+                }
+                break;
+
+            case EVENT_DELIVERY_COMPLETE:
+                for (Order* o : orders) {
+                    if (o->getOrderId() == event.orderId) {
+                        currentOrder = o;
+                        break;
+                    }
+                }
+                if (currentOrder) {
+                    currentOrder->completeDelivery();
+                    if (useRealImplementation) {
+                        deliverySystem.completeDelivery(event.orderId);
+                    }
+                    cout << "[시간: " << fixed << setprecision(1) << event.time
+                         << "초] 기사 #" << event.driverId << "이(가) 주문 #" << event.orderId
+                         << " 배달 완료! (거리: " << fixed << setprecision(2) << event.distance << ")" << endl;
+                }
+                break;
+        }
+    }
+
+    double totalTime = events.empty() ? 0.0 : events.back().time;
     cout << "\n모든 주문이 처리되었습니다!\n" << endl;
 
     // 결과 출력
-    printSimulationResults(driverStats, orderStats, currentTime);
+    printSimulationResults(driverStats, orderStats, totalTime);
 }
 
 void Simulator::printSimulationResults(const map<int, DriverStats>& driverStats,
