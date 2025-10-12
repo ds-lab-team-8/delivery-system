@@ -35,6 +35,12 @@ private:
     // 실제 DeliverySystem 구현 사용 여부 (false: Mock 모드, true: 실제 구현 사용)
     bool useRealImplementation;
 
+    // ID 자동 증가 카운터
+    int nextOrdererId;
+    int nextDriverId;
+    int nextStoreId;
+    int nextOrderId;
+
     // 시뮬레이션 메서드
     void runSimulation();
 
