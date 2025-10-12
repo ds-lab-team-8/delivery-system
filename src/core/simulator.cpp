@@ -6,6 +6,9 @@
 #include <cmath>
 #include <algorithm>
 #include <random>
+#include <ctime>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 // 통계 데이터 구조체
 struct DriverStats {
@@ -668,15 +671,30 @@ void Simulator::printSimulationResults(const map<int, DriverStats>& driverStats,
 
     // 결과 파일 저장
     saveResultsToFile(driverStats, orderStats, totalTime);
-
-    cout << "\n결과가 'simulation_result.txt'에 저장되었습니다." << endl;
     printSeparator();
 }
 
 void Simulator::saveResultsToFile(const map<int, DriverStats>& driverStats,
                                   const map<int, OrderStats>& orderStats,
                                   double totalTime) {
-    ofstream outFile("simulation_result.txt");
+    // out 디렉토리 생성
+    mkdir("out", 0755);
+    
+    // 현재 시간으로 타임스탬프 생성
+    time_t now = time(nullptr);
+    tm* ltm = localtime(&now);
+    
+    ostringstream filename;
+    filename << "out/simulation_result_"
+             << (1900 + ltm->tm_year)
+             << setfill('0') << setw(2) << (1 + ltm->tm_mon)
+             << setfill('0') << setw(2) << ltm->tm_mday << "_"
+             << setfill('0') << setw(2) << ltm->tm_hour
+             << setfill('0') << setw(2) << ltm->tm_min
+             << setfill('0') << setw(2) << ltm->tm_sec
+             << ".txt";
+    
+    ofstream outFile(filename.str());
 
     if (!outFile.is_open()) {
         cout << "결과 파일 저장에 실패했습니다." << endl;
@@ -751,6 +769,8 @@ void Simulator::saveResultsToFile(const map<int, DriverStats>& driverStats,
 
     outFile << "====================================\n";
     outFile.close();
+    
+    cout << "\n결과가 '" << filename.str() << "'에 저장되었습니다." << endl;
 }
 
 void Simulator::printHeader() {
