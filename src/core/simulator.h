@@ -56,6 +56,17 @@ private:
     void printHeader();
     void printSeparator();
     void printHelp();
+
+    // 유틸리티 메서드
+    string generateRandomName(const string& prefix);
+    int generateRandomCoordinate(int min, int max);
+
+    // 조회 메서드
+    void listAll();
+    void listOrderers();
+    void listDrivers();
+    void listStores();
+    void listOrders();
 };
 
 #endif

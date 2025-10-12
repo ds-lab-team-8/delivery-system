@@ -5,6 +5,7 @@
 #include <map>
 #include <cmath>
 #include <algorithm>
+#include <random>
 
 // 통계 데이터 구조체
 struct DriverStats {
@@ -135,6 +136,140 @@ void Simulator::simulateWithUserInput() {
                  << ", 주문자 ID: " << ordererId
                  << ", 매장 ID: " << storeId
                  << ", 배달 위치: (" << x << ", " << y << ")" << endl;
+
+        } else if (cmd == "add_orderer_random") {
+            int n;
+            iss >> n;
+
+            if (n <= 0) {
+                cout << "개수는 1 이상이어야 합니다." << endl;
+                continue;
+            }
+
+            cout << "[" << n << "명의 주문자를 랜덤으로 추가합니다]" << endl;
+            for (int i = 0; i < n; i++) {
+                string name = generateRandomName("Orderer");
+                int x = generateRandomCoordinate(0, 100);
+                int y = generateRandomCoordinate(0, 100);
+                int id = nextOrdererId++;
+
+                Location loc(x, y);
+                Orderer orderer(id, name, loc);
+
+                if (useRealImplementation) {
+                    deliverySystem.addOrderer(orderer);
+                }
+
+                orderers.push_back(orderer);
+                cout << "  ID: " << id << ", 이름: " << name 
+                     << ", 위치: (" << x << ", " << y << ")" << endl;
+            }
+
+        } else if (cmd == "add_driver_random") {
+            int n;
+            iss >> n;
+
+            if (n <= 0) {
+                cout << "개수는 1 이상이어야 합니다." << endl;
+                continue;
+            }
+
+            cout << "[" << n << "명의 기사를 랜덤으로 추가합니다]" << endl;
+            for (int i = 0; i < n; i++) {
+                string name = generateRandomName("Driver");
+                int x = generateRandomCoordinate(0, 100);
+                int y = generateRandomCoordinate(0, 100);
+                int id = nextDriverId++;
+
+                Location loc(x, y);
+                Driver driver(id, name, loc);
+
+                if (useRealImplementation) {
+                    deliverySystem.addDriver(driver);
+                }
+
+                drivers.push_back(driver);
+                cout << "  ID: " << id << ", 이름: " << name 
+                     << ", 위치: (" << x << ", " << y << ")" << endl;
+            }
+
+        } else if (cmd == "add_store_random") {
+            int n;
+            iss >> n;
+
+            if (n <= 0) {
+                cout << "개수는 1 이상이어야 합니다." << endl;
+                continue;
+            }
+
+            cout << "[" << n << "개의 매장을 랜덤으로 추가합니다]" << endl;
+            for (int i = 0; i < n; i++) {
+                string name = generateRandomName("Store");
+                int x = generateRandomCoordinate(0, 100);
+                int y = generateRandomCoordinate(0, 100);
+                int id = nextStoreId++;
+
+                Location loc(x, y);
+                Store store(id, name, loc);
+
+                if (useRealImplementation) {
+                    deliverySystem.addStore(store);
+                }
+
+                stores.push_back(store);
+                cout << "  ID: " << id << ", 이름: " << name 
+                     << ", 위치: (" << x << ", " << y << ")" << endl;
+            }
+
+        } else if (cmd == "add_order_random") {
+            int n;
+            iss >> n;
+
+            if (n <= 0) {
+                cout << "개수는 1 이상이어야 합니다." << endl;
+                continue;
+            }
+
+            if (orderers.empty()) {
+                cout << "주문자가 없습니다. 먼저 주문자를 추가해주세요." << endl;
+                continue;
+            }
+
+            if (stores.empty()) {
+                cout << "매장이 없습니다. 먼저 매장을 추가해주세요." << endl;
+                continue;
+            }
+
+            cout << "[" << n << "건의 주문을 랜덤으로 추가합니다]" << endl;
+            
+            static random_device rd;
+            static mt19937 gen(rd());
+            uniform_int_distribution<> ordererDis(0, orderers.size() - 1);
+            uniform_int_distribution<> storeDis(0, stores.size() - 1);
+
+            for (int i = 0; i < n; i++) {
+                int orderId = nextOrderId++;
+                int ordererId = orderers[ordererDis(gen)].getId();
+                int storeId = stores[storeDis(gen)].getId();
+                int x = generateRandomCoordinate(0, 100);
+                int y = generateRandomCoordinate(0, 100);
+
+                Location deliveryLoc(x, y);
+                Order* order = new Order(orderId, ordererId, storeId, deliveryLoc);
+
+                if (useRealImplementation) {
+                    deliverySystem.addOrder(*order);
+                }
+
+                orders.push_back(order);
+                cout << "  주문 ID: " << orderId 
+                     << ", 주문자 ID: " << ordererId
+                     << ", 매장 ID: " << storeId
+                     << ", 배달 위치: (" << x << ", " << y << ")" << endl;
+            }
+
+        } else if (cmd == "list") {
+            listAll();
 
         } else if (cmd == "start") {
             cout << "\n시뮬레이션을 시작합니다...\n" << endl;
@@ -497,11 +632,120 @@ void Simulator::printHelp() {
     cout << "    - 매장을 추가합니다. (ID는 자동 생성)" << endl;
     cout << "  add_order <ordererId> <storeId> <deliveryX> <deliveryY>" << endl;
     cout << "    - 주문을 추가합니다. (주문 ID는 자동 생성)" << endl;
+    cout << "  add_orderer_random <n>" << endl;
+    cout << "    - n개의 주문자를 랜덤으로 추가합니다." << endl;
+    cout << "  add_driver_random <n>" << endl;
+    cout << "    - n개의 기사를 랜덤으로 추가합니다." << endl;
+    cout << "  add_store_random <n>" << endl;
+    cout << "    - n개의 매장을 랜덤으로 추가합니다." << endl;
+    cout << "  add_order_random <n>" << endl;
+    cout << "    - n개의 주문을 랜덤으로 추가합니다." << endl;
+    cout << "  list" << endl;
+    cout << "    - 모든 주문자, 기사, 매장, 주문을 조회합니다." << endl;
     cout << "  start" << endl;
     cout << "    - 시뮬레이션을 시작합니다." << endl;
     cout << "  help" << endl;
     cout << "    - 도움말을 출력합니다." << endl;
     cout << "  quit / exit" << endl;
     cout << "    - 시뮬레이터를 종료합니다." << endl;
+    printSeparator();
+}
+
+string Simulator::generateRandomName(const string& prefix) {
+    static random_device rd;
+    static mt19937 gen(rd());
+    static uniform_int_distribution<> dis(1000, 9999);
+    
+    return prefix + to_string(dis(gen));
+}
+
+int Simulator::generateRandomCoordinate(int min, int max) {
+    static random_device rd;
+    static mt19937 gen(rd());
+    uniform_int_distribution<> dis(min, max);
+    
+    return dis(gen);
+}
+
+void Simulator::listAll() {
+    cout << "\n====================================" << endl;
+    cout << "         전체 목록 조회" << endl;
+    cout << "====================================" << endl;
+    
+    listOrderers();
+    cout << endl;
+    listDrivers();
+    cout << endl;
+    listStores();
+    cout << endl;
+    listOrders();
+}
+
+void Simulator::listOrderers() {
+    if (orderers.empty()) {
+        cout << "등록된 주문자가 없습니다." << endl;
+        return;
+    }
+    
+    cout << "[주문자 목록 (총 " << orderers.size() << "명)]" << endl;
+    printSeparator();
+    for (const Orderer& orderer : orderers) {
+        cout << "ID: " << orderer.getId()
+             << ", 이름: " << orderer.getName()
+             << ", 위치: (" << orderer.getLocation().getX() << ", " 
+             << orderer.getLocation().getY() << ")" << endl;
+    }
+    printSeparator();
+}
+
+void Simulator::listDrivers() {
+    if (drivers.empty()) {
+        cout << "등록된 기사가 없습니다." << endl;
+        return;
+    }
+    
+    cout << "[기사 목록 (총 " << drivers.size() << "명)]" << endl;
+    printSeparator();
+    for (const Driver& driver : drivers) {
+        cout << "ID: " << driver.getId()
+             << ", 이름: " << driver.getName()
+             << ", 위치: (" << driver.getCurrentLocation().getX() << ", " 
+             << driver.getCurrentLocation().getY() << ")" << endl;
+    }
+    printSeparator();
+}
+
+void Simulator::listStores() {
+    if (stores.empty()) {
+        cout << "등록된 매장이 없습니다." << endl;
+        return;
+    }
+    
+    cout << "[매장 목록 (총 " << stores.size() << "개)]" << endl;
+    printSeparator();
+    for (const Store& store : stores) {
+        cout << "ID: " << store.getId()
+             << ", 이름: " << store.getName()
+             << ", 위치: (" << store.getLocation().getX() << ", " 
+             << store.getLocation().getY() << ")" << endl;
+    }
+    printSeparator();
+}
+
+void Simulator::listOrders() {
+    if (orders.empty()) {
+        cout << "등록된 주문이 없습니다." << endl;
+        return;
+    }
+    
+    cout << "[주문 목록 (총 " << orders.size() << "건)]" << endl;
+    printSeparator();
+    for (const Order* order : orders) {
+        cout << "주문 ID: " << order->getOrderId()
+             << ", 주문자 ID: " << order->getOrdererId()
+             << ", 매장 ID: " << order->getStoreId()
+             << ", 배달 위치: (" << order->getDeliveryLocation().getX() << ", " 
+             << order->getDeliveryLocation().getY() << ")" << endl;
+    }
     printSeparator();
 }
