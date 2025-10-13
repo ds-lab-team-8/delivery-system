@@ -42,3 +42,6 @@
 
 # etc
 .DS_Store
+/bin
+/build
+/out
