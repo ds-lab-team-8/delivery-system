@@ -440,114 +440,200 @@ void Simulator::runSimulation() {
 
     const double SPEED = 1.0;
 
-    // 통계 데이터 초기화
     map<int, DriverStats> driverStats;
     map<int, OrderStats> orderStats;
     map<int, Location> driverLocations;
     map<int, double> driverAvailableTime;
+    map<int, Store*> storeMap;
+    map<int, string> driverNames;
+    
+    map<int, vector<int>> driverCallQueue;
+    map<int, bool> orderAssigned;
 
     for (const Driver& driver : drivers) {
         driverStats[driver.getId()] = DriverStats();
         driverLocations[driver.getId()] = driver.getCurrentLocation();
         driverAvailableTime[driver.getId()] = 0.0;
+        driverNames[driver.getId()] = driver.getName();
+        driverCallQueue[driver.getId()] = vector<int>();
     }
 
-    // 배차 요청
-    if (useRealImplementation) {
-        deliverySystem.requestCallsToDrivers();
-    }
-
-    cout << "\n[시간: 0.0초] 모든 주문이 기사들에게 배차 요청되었습니다.\n" << endl;
-
-    // 이벤트 큐 생성
-    vector<Event> events;
-    map<int, Store*> storeMap;
-    map<int, string> driverNames;
-
-    // 매장 맵 생성
     for (Store& store : stores) {
         storeMap[store.getId()] = &store;
     }
 
-    // 기사 이름 맵 생성
-    for (const Driver& driver : drivers) {
-        driverNames[driver.getId()] = driver.getName();
+    for (Order* order : orders) {
+        orderAssigned[order->getOrderId()] = false;
     }
 
-    // 시간 0에 모든 주문에 대해 가장 빠르게 처리 가능한 기사 배정
-    for (Order* order : orders) {
-        Store* targetStore = storeMap[order->getStoreId()];
-        if (!targetStore) continue;
+    vector<Event> events;
+    double currentTime = 0.0;
 
-        Location storeLocation = targetStore->getLocation();
-        
-        // 가장 빠르게 도착 가능한 기사 찾기
-        int bestDriverId = -1;
-        double earliestArrival = -1;
+    if (useRealImplementation) {
+        deliverySystem.requestCallsToDrivers();
+    } else {
+        for (Order* order : orders) {
+            for (const Driver& driver : drivers) {
+                driverCallQueue[driver.getId()].push_back(order->getOrderId());
+            }
+        }
+    }
 
-        for (const auto& pair : driverAvailableTime) {
-            int driverId = pair.first;
-            double availableTime = pair.second;
+    cout << "\n[시간: 0.0초] 모든 주문이 기사들에게 배차 요청되었습니다.\n" << endl;
+
+    bool allOrdersAssigned = false;
+    
+    while (!allOrdersAssigned) {
+        for (const Driver& driver : drivers) {
+            int driverId = driver.getId();
+            
+            if (driverAvailableTime[driverId] > currentTime) {
+                continue;
+            }
+
+            if (driverCallQueue[driverId].empty()) {
+                continue;
+            }
+
+            int bestOrderId = -1;
+            double minDistance = -1;
             Location driverLoc = driverLocations[driverId];
-            double distance = driverLoc.calculateDistance(storeLocation);
-            double arrivalTime = availableTime + distance / SPEED;
 
-            if (earliestArrival < 0 || arrivalTime < earliestArrival) {
-                earliestArrival = arrivalTime;
-                bestDriverId = driverId;
+            for (int orderId : driverCallQueue[driverId]) {
+                if (orderAssigned[orderId]) continue;
+
+                Order* order = nullptr;
+                for (Order* o : orders) {
+                    if (o->getOrderId() == orderId) {
+                        order = o;
+                        break;
+                    }
+                }
+                if (!order) continue;
+
+                Store* targetStore = storeMap[order->getStoreId()];
+                if (!targetStore) continue;
+
+                double distance = driverLoc.calculateDistance(targetStore->getLocation());
+                
+                if (minDistance < 0 || distance < minDistance) {
+                    minDistance = distance;
+                    bestOrderId = orderId;
+                }
+            }
+
+            if (bestOrderId == -1) {
+                continue;
+            }
+
+            try {
+                Order* assignedOrder = nullptr;
+                for (Order* o : orders) {
+                    if (o->getOrderId() == bestOrderId) {
+                        assignedOrder = o;
+                        break;
+                    }
+                }
+
+                if (!assignedOrder) continue;
+
+                assignedOrder->assignDriver(driverId);
+                
+                if (useRealImplementation) {
+                    deliverySystem.acceptCall(bestOrderId);
+                }
+
+                orderAssigned[bestOrderId] = true;
+
+                Store* targetStore = storeMap[assignedOrder->getStoreId()];
+                Location storeLocation = targetStore->getLocation();
+                
+                double pickupDistance = driverLocations[driverId].calculateDistance(storeLocation);
+                double pickupTime = pickupDistance / SPEED;
+                double pickupCompleteTime = driverAvailableTime[driverId] + pickupTime;
+
+                Location deliveryLocation = assignedOrder->getDeliveryLocation();
+                double deliveryDistance = storeLocation.calculateDistance(deliveryLocation);
+                double deliveryTime = deliveryDistance / SPEED;
+                double deliveryCompleteTime = pickupCompleteTime + deliveryTime;
+
+                events.push_back(Event(driverAvailableTime[driverId], EVENT_ORDER_ASSIGNED, 
+                                      bestOrderId, driverId, driverLocations[driverId]));
+                events.push_back(Event(pickupCompleteTime, EVENT_PICKUP_COMPLETE, 
+                                      bestOrderId, driverId, storeLocation, pickupDistance));
+                events.push_back(Event(deliveryCompleteTime, EVENT_DELIVERY_COMPLETE, 
+                                      bestOrderId, driverId, deliveryLocation, deliveryDistance));
+
+                driverAvailableTime[driverId] = deliveryCompleteTime;
+                driverLocations[driverId] = deliveryLocation;
+
+                OrderStats oStats;
+                oStats.orderId = bestOrderId;
+                oStats.driverId = driverId;
+                oStats.pickupDistance = pickupDistance;
+                oStats.deliveryDistance = deliveryDistance;
+                oStats.totalTime = pickupTime + deliveryTime;
+                orderStats[bestOrderId] = oStats;
+
+                driverStats[driverId].deliveryCount++;
+                driverStats[driverId].totalDistance += (pickupDistance + deliveryDistance);
+                driverStats[driverId].completedOrders.push_back(bestOrderId);
+
+            } catch (...) {
             }
         }
 
-        if (bestDriverId == -1) continue;
-
-        // 기사 배정
-        order->assignDriver(bestDriverId);
-        if (useRealImplementation) {
-            deliverySystem.acceptCall(order->getOrderId());
+        allOrdersAssigned = true;
+        for (const auto& pair : orderAssigned) {
+            if (!pair.second) {
+                allOrdersAssigned = false;
+                break;
+            }
         }
 
-        // 픽업 거리 및 시간 계산
-        Location currentDriverLoc = driverLocations[bestDriverId];
-        double pickupDistance = currentDriverLoc.calculateDistance(storeLocation);
-        double pickupTime = pickupDistance / SPEED;
-        double pickupCompleteTime = driverAvailableTime[bestDriverId] + pickupTime;
+        if (!allOrdersAssigned) {
+            double minNextAvailable = -1;
+            for (const auto& pair : driverAvailableTime) {
+                if (pair.second > currentTime) {
+                    if (minNextAvailable < 0 || pair.second < minNextAvailable) {
+                        minNextAvailable = pair.second;
+                    }
+                }
+            }
 
-        // 배달 거리 및 시간 계산
-        Location deliveryLocation = order->getDeliveryLocation();
-        double deliveryDistance = storeLocation.calculateDistance(deliveryLocation);
-        double deliveryTime = deliveryDistance / SPEED;
-        double deliveryCompleteTime = pickupCompleteTime + deliveryTime;
-
-        // 이벤트 생성
-        events.push_back(Event(driverAvailableTime[bestDriverId], EVENT_ORDER_ASSIGNED, 
-                              order->getOrderId(), bestDriverId, currentDriverLoc));
-        events.push_back(Event(pickupCompleteTime, EVENT_PICKUP_COMPLETE, 
-                              order->getOrderId(), bestDriverId, storeLocation, pickupDistance));
-        events.push_back(Event(deliveryCompleteTime, EVENT_DELIVERY_COMPLETE, 
-                              order->getOrderId(), bestDriverId, deliveryLocation, deliveryDistance));
-
-        // 기사의 다음 가용 시간 업데이트
-        driverAvailableTime[bestDriverId] = deliveryCompleteTime;
-        driverLocations[bestDriverId] = deliveryLocation;
-
-        // 통계 데이터 준비
-        OrderStats oStats;
-        oStats.orderId = order->getOrderId();
-        oStats.driverId = bestDriverId;
-        oStats.pickupDistance = pickupDistance;
-        oStats.deliveryDistance = deliveryDistance;
-        oStats.totalTime = pickupTime + deliveryTime;
-        orderStats[order->getOrderId()] = oStats;
-
-        driverStats[bestDriverId].deliveryCount++;
-        driverStats[bestDriverId].totalDistance += (pickupDistance + deliveryDistance);
-        driverStats[bestDriverId].completedOrders.push_back(order->getOrderId());
+            if (minNextAvailable > 0) {
+                currentTime = minNextAvailable;
+                
+                if (useRealImplementation) {
+                    deliverySystem.requestCallsToDrivers();
+                } else {
+                    for (Order* order : orders) {
+                        if (!orderAssigned[order->getOrderId()]) {
+                            for (const Driver& driver : drivers) {
+                                if (driverAvailableTime[driver.getId()] <= currentTime) {
+                                    bool alreadyInQueue = false;
+                                    for (int oid : driverCallQueue[driver.getId()]) {
+                                        if (oid == order->getOrderId()) {
+                                            alreadyInQueue = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!alreadyInQueue) {
+                                        driverCallQueue[driver.getId()].push_back(order->getOrderId());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
     }
 
-    // 이벤트를 시간순으로 정렬
     sort(events.begin(), events.end());
 
-    // 이벤트 처리 및 출력
     for (const Event& event : events) {
         Order* currentOrder = nullptr;
         
@@ -601,7 +687,6 @@ void Simulator::runSimulation() {
     double totalTime = events.empty() ? 0.0 : events.back().time;
     cout << "\n모든 주문이 처리되었습니다!\n" << endl;
 
-    // 결과 출력
     printSimulationResults(driverStats, orderStats, totalTime);
 }
 
