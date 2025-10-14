@@ -36,7 +36,6 @@ private:
     vector<Orderer> orderers;
     vector<Driver> drivers;
     vector<Store> stores;
-    // TODO: Queue 자료구조로 수정
     vector<Order*> orders;
 };
 
