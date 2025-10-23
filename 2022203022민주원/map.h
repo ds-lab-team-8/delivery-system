@@ -18,16 +18,16 @@ public:
     MapItem(const Location& location, ItemType itemType, int id);
     ~MapItem();
 
-	// Getters
+    // Getters
     Location getLocation() const;
     ItemType getItemType() const;
     int getId() const;
-    
-	// Setters
+
+    // Setters
     void setLocation(const Location& newLocation);
 
 
-    int pos_of_map_vec; //해당 아이템이 items에 몇번째 노드에 위치해있는지 저장
+    int node; //해당 아이템이 items에 몇번째 노드에 위치해있는지 저장
 private:
     Location location;
     ItemType itemType;
@@ -39,21 +39,21 @@ public:
     Map(int width, int height);
     ~Map();
 
-    void addItem(const MapItem& item);
+    void addItem(MapItem& item);
     vector<MapItem> getAllItems() const;
-    
+
     // Getters
     int getWidth() const;
     int getHeight() const;
 
 
-//map을 세팅할떄 주의점, MapItem을 전부 추가한뒤에 SetMap해야함 
-//
-//arr는 MapItem끼리 연결되있는지의 여부를 1과0의 정보로 받음 
-//예시) arr[1][3]=0 이면 items[3] 에서 items[1]로 가는 길은 없다는 의미 이다.
-//반대로 arr[3][1]=1 이면 items[1] 에서 items[3]로 가는 길은 있다는 의미 이다.
-    void SetMap(int** arr); 
-
+    //map을 세팅할떄 주의점, MapItem을 전부 추가한뒤에 SetMap해야함 
+    //
+    //arr는 MapItem끼리 연결되있는지의 여부를 1과0의 정보로 받음 
+    //예시) arr[1][3]=0 이면 items[3] 에서 items[1]로 가는 길은 없다는 의미 이다.
+    //반대로 arr[3][1]=1 이면 items[1] 에서 items[3]로 가는 길은 있다는 의미 이다.
+    void SetMap(int** arr);
+    int GetMap_pos(int crt, int trg); //currentPos 에서 targetPos까지의 직접적인 거리. 길이없으면 -1 반환
 
     MapItem find_route(const MapItem& crt, const MapItem& trg); //crt에 위치했을때 trg로 가려면 어느 노드로 가야하는지 반환
 private:
@@ -68,18 +68,18 @@ private:
 };
 
 MapItem::MapItem(const Location& location, ItemType itemType, int id)   // 맵 아이템 초기화 작업
-	: location(location), itemType(itemType), id(id) {}
+    : location(location), itemType(itemType), id(id) {}
 
-MapItem::~MapItem(){                                                 // 맵 아이템 소멸자
+MapItem::~MapItem() {                                                 // 맵 아이템 소멸자
 
 }
 
 Location MapItem::getLocation() const {                                 // 위치 정보 반환
-	return location;
+    return location;
 }
 
 ItemType MapItem::getItemType() const {
-	return itemType;
+    return itemType;
 }                                                                       // 아이템 타입 반환
 
 int MapItem::getId() const {
@@ -87,25 +87,25 @@ int MapItem::getId() const {
 }                                                                       // 아이템 ID 반환
 
 void MapItem::setLocation(const Location& newLocation) {                // 위치 정보 업데이트
-	location = newLocation;
+    location = newLocation;
 }
 
 Map::Map(int width, int height) : width(width), height(height) {}       // 맵 초기화 작업 
 
 Map::~Map() {                                                          // 맵 소멸자
-    for(int i=0;i<items.size();i++){
+    for (int i = 0;i < items.size();i++) {
         delete[] map_pos[i];
         delete[] map_cost[i];
     }
 
     delete[] map_pos;
     delete[] map_cost;
-	
+
 }
 
-void Map::addItem(const MapItem& item) {                                // 맵 아이템 추가
+void Map::addItem(MapItem& item) {                                // 맵 아이템 추가
     items.push_back(item);
-    item.pos_of_map_vec = items.size()-1;
+    item.node = items.size() - 1;
 }
 
 vector<MapItem> Map::getAllItems() const {                              // 모든 맵 아이템 반환
@@ -120,29 +120,29 @@ int Map::getHeight() const {                                            // 맵�
     return height;
 }
 
-void Map::SetMap(int** arr) {  
-    map_pos =  arr;                                     
-    for(int i=0;i<items.size();i++){
-        for(int j=0;j<items.size();j++){
-            if(map_pos[i][j]==1){
+void Map::SetMap(int** arr) {
+    map_pos = arr;
+    for (int i = 0;i < items.size();i++) {
+        for (int j = 0;j < items.size();j++) {
+            if (map_pos[i][j] == 1) {
                 map_pos[i][j] = items[i].getLocation().calculateDistance(items[j].getLocation()); //i와 j사이의 거리는 추후에 임의로 수정가능한 코드
-            } 
-            else if(map_pos[i][j]==0){
-                map_pos[i][j]  = -1   //inf 취급
+            }
+            else if (map_pos[i][j] == 0) {
+                map_pos[i][j] = -1;   //inf 취급
             }
         }
     }
 
-    map_cost = new int* [size];
-    for (int i = 0; i < size; i++)
+    map_cost = new int* [items.size()];
+    for (int i = 0; i < items.size(); i++)
     {
-        map_cost[i] = new int[size];
+        map_cost[i] = new int[items.size()];
     }
 
-    for (int j = 0; j < size; j++)
+    for (int j = 0; j < items.size(); j++)
     {
-        int* temp = new int[size];
-        for (int i = 0; i < size; i++)
+        int* temp = new int[items.size()];
+        for (int i = 0; i < items.size(); i++)
         {
             temp[i] = INT_MAX;
         }
@@ -151,7 +151,7 @@ void Map::SetMap(int** arr) {
         vector<int> v;
         loop_cost(v, temp, j);
 
-        for (int i = 0; i < size; i++)
+        for (int i = 0; i < items.size(); i++)
         {
             map_cost[j][i] = temp[i];
         }
@@ -160,12 +160,16 @@ void Map::SetMap(int** arr) {
     }
 }
 
-void Map::loop_cost(vector<int> check, int* temp,int node) {  //map_cost를 세팅하기위한 재귀함수
-    check.push_back(node);
-   
+int Map::GetMap_pos(int crt, int trg) {
+    return map_pos[trg][crt];
+}
 
-    int* crr = new int[size];
-    for (int i = 0; i < size; i++)
+void Map::loop_cost(vector<int> check, int* temp, int node) {  //map_cost를 세팅하기위한 재귀함수
+    check.push_back(node);
+
+
+    int* crr = new int[items.size()];
+    for (int i = 0; i < items.size(); i++)
     {
         crr[i] = 0;
     }
@@ -175,7 +179,7 @@ void Map::loop_cost(vector<int> check, int* temp,int node) {  //map_cost를 세�
         crr[check.at(i)] = 1;
     }
 
-    for (int i = 0; i < size; i++)
+    for (int i = 0; i < items.size(); i++)
     {
         if (crr[i] == 1 || map_pos[node][i] < 0)continue;
 
@@ -190,14 +194,14 @@ void Map::loop_cost(vector<int> check, int* temp,int node) {  //map_cost를 세�
     delete crr;
 }
 
-int  Map::find_route(const MapItem& crt, const MapItem& trg) { 
-    int crtPos = crt.pos_of_map_vec;
-    int trgPos = trg.pos_of_map_vec;
+MapItem  Map::find_route(const MapItem& crt, const MapItem& trg) {
+    int crtPos = crt.node;
+    int trgPos = trg.node;
 
     int min = INT_MAX;
     int result = -1;
-    
-    for (int i = 0; i < size; i++)
+
+    for (int i = 0; i < items.size(); i++)
     {
         if (map_pos[i][crtPos] <= 0) continue;
 
