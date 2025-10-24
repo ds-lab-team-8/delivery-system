@@ -24,7 +24,7 @@ class Location {
         bool operator!=(const Location& other) const;
 
 
-        int node;
+        int node; //해당 좌표가 맵에 몇번째 노드에 위치해있는지 저장
 
     private:
         int x;
