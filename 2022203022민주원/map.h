@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include "location.h"
+#include <climits>
 
 using namespace std;
 
