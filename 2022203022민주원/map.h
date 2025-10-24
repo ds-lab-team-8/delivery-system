@@ -63,9 +63,9 @@ private:
 
     vector<Location> nodes;
 
-    int** map_pos;  //map의 연결정보를 담은 행렬그래프.   map[1][3]=5 이면 items[3] 에서 items[1]로 가는 길은 5의 시간을 소모한다는 의미이다.
-    int** map_cost;   //items[j]에서 출발해서 items[i]로 도착하기위한 최단시간을 map_cost[i][j]로 저장한 행렬
-    void loop_cost(vector<int> check, int* temp, int node);
+    double** map_pos;  //map의 연결정보를 담은 행렬그래프.   map[1][3]=5 이면 items[3] 에서 items[1]로 가는 길은 5의 시간을 소모한다는 의미이다.
+    double** map_cost;   //items[j]에서 출발해서 items[i]로 도착하기위한 최단시간을 map_cost[i][j]로 저장한 행렬
+    void loop_cost(vector<int> check, double* temp, int node);
 };
 
 MapItem::MapItem(const Location& location, ItemType itemType, int id)   // 맵 아이템 초기화 작업
@@ -94,7 +94,7 @@ void MapItem::setLocation(const Location& newLocation) {                // 위�
 Map::Map(int width, int height) : width(width), height(height) {}       // 맵 초기화 작업 
 
 Map::~Map() {                                                          // 맵 소멸자
-    for (int i = 0;i < nodes..size();i++) {
+    for (int i = 0;i < nodes.size();i++) {
         delete[] map_pos[i];
         delete[] map_cost[i];
     }
@@ -126,27 +126,33 @@ int Map::getHeight() const {                                            // 맵�
 }
 
 void Map::SetMap(int** arr) {
-    map_pos = arr;
+    map_pos = new double*[nodes.size()];
+    for (int i = 0; i < nodes.size(); i++)
+    {
+        map_pos[i] = new double[nodes.size()];
+    }
+
+
     for (int i = 0;i < nodes.size();i++) {
         for (int j = 0;j < nodes.size();j++) {
-            if (map_pos[i][j] == 1) {
-                map_pos[i][j] = nodes.calculateDistance(nodes[j]); //i와 j사이의 거리는 추후에 임의로 수정가능한 코드
+            if (arr[i][j] == 1) {
+                map_pos[i][j] = nodes[i].calculateDistance(nodes[j]); //i와 j사이의 거리는 추후에 임의로 수정가능한 코드
             }
-            else if (map_pos[i][j] == 0) {
+            else if (arr[i][j] == 0) {
                 map_pos[i][j] = -1;   //inf 취급
             }
         }
     }
 
-    map_cost = new int* [nodes.size()];
+    map_cost = new double* [nodes.size()];
     for (int i = 0; i < nodes.size(); i++)
     {
-        map_cost[i] = new int[nodes.size()];
+        map_cost[i] = new double[nodes.size()];
     }
 
     for (int j = 0; j < nodes.size(); j++)
     {
-        int* temp = new int[nodes.size()];
+        double* temp = new double[nodes.size()];
         for (int i = 0; i < nodes.size(); i++)
         {
             temp[i] = INT_MAX;
@@ -163,13 +169,20 @@ void Map::SetMap(int** arr) {
 
         delete temp;
     }
+
+
+    for (int i = 0;i < nodes.size();i++) {
+        delete[] arr[i];
+    }
+
+    delete[] arr;
 }
 
 int Map::GetMap_pos(int crt, int trg) {
     return map_pos[trg][crt];
 }
 
-void Map::loop_cost(vector<int> check, int* temp, int node) {  //map_cost를 세팅하기위한 재귀함수
+void Map::loop_cost(vector<int> check, double* temp, int node) {  //map_cost를 세팅하기위한 재귀함수
     check.push_back(node);
 
 
@@ -189,7 +202,7 @@ void Map::loop_cost(vector<int> check, int* temp, int node) {  //map_cost를 세
         if (crr[i] == 1 || map_pos[node][i] < 0)continue;
 
 
-        int cost = temp[node] + map_pos[node][i];
+        double cost = temp[node] + map_pos[node][i];
         if (cost < temp[i]) {
             temp[i] = cost;
             loop_cost(check, temp, i);
@@ -200,17 +213,17 @@ void Map::loop_cost(vector<int> check, int* temp, int node) {  //map_cost를 세
 }
 
 Location  Map::find_route(const Location& crt, const Location& trg) {
-    int crtPos = crt.node;
-    int trgPos = trg.node;
+    int crtNode = crt.node;
+    int trgNode = trg.node;
 
-    int min = INT_MAX;
+    double min = INT_MAX;
     int result = -1;
 
     for (int i = 0; i < nodes.size(); i++)
     {
-        if (map_pos[i][crtPos] <= 0) continue;
+        if (map_pos[i][crtNode] <= 0) continue;
 
-        int cost = map_pos[i][crtPos] + map_cost[trgPos][i];
+        double cost = map_pos[i][crtNode] + map_cost[trgNode][i];
         if (cost < min) {
             min = cost;
             result = i;
