@@ -5,25 +5,23 @@
 #include <vector>
 #include "location.h"
 
-using namespace std;
-
-
 enum ItemType {
     ORDERER,
     DRIVER,
     STORE
 };
 
-
 class MapItem {
 public:
     MapItem(const Location& location, ItemType itemType, int id);
     ~MapItem();
 
+	// Getters
     Location getLocation() const;
     ItemType getItemType() const;
     int getId() const;
     
+	// Setters
     void setLocation(const Location& newLocation);
 
 private:
@@ -31,7 +29,6 @@ private:
     ItemType itemType;
     int id;
 };
-
 
 class Map {
 public:
@@ -41,6 +38,11 @@ public:
     void addItem(const MapItem& item);
     vector<MapItem> getAllItems() const;
 
+    double calculateShortestDistance(const Location& from, const Location& to) const;   // 최단 거리 계산 (다익스트라)
+    vector<Location> getShortestPath(const Location& from, const Location& to) const;
+
+    void addEdge(const Location& from, const Location& to, double weight);              // 그래프 간선 추가
+    
     // Getters
     int getWidth() const;
     int getHeight() const;
@@ -49,9 +51,7 @@ private:
     int width;
     int height;
     vector<MapItem> items;
-
-    // 추가로 그래프 가중치 정보 및 최단 거리 정보 등이 필요한 경우 선언하여 사용
-
+    map<Location, vector<pair<Location, double>>> adjacencyList;                        // 그래프 표현: 인접 리스트
 };
 
 #endif
