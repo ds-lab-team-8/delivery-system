@@ -38,6 +38,10 @@ class Order {
         // Utility methods
         bool isDeliveryCompleted() const;       // 배달 완료 여부 확인
 
+
+//호환 안되는 부분
+//호환 안되는 부분
+//호환 안되는 부분
         Orderer orderer;
         Store store;
 
