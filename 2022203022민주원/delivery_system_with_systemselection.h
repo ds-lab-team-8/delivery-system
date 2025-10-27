@@ -20,8 +20,8 @@ public:
 
 class DistanceAndNode {
 public:
-    DistanceAndNode(double dis,int d,int o) {
-        distance = d;
+    DistanceAndNode(double dis, int d, int o) {
+        distance = dis;
         driver = d;
         order = o;
     }
@@ -34,8 +34,8 @@ public:
 
 using namespace std;
 
-bool sort_dis(DistanceAndNode& a, DistanceAndNode& b) {
-    return a.distance < b.distance;
+bool sort_dis(DistanceAndNode* a, DistanceAndNode* b) {
+    return a->distance < b->distance;
 }
 
 void DeliverySystemWithSystemSelection::Selection() {
@@ -45,13 +45,13 @@ void DeliverySystemWithSystemSelection::Selection() {
     distance_arr = new double* [drivers.size()];
     for (int i = 0;i < drivers.size();i++) {
         distance_arr[i] = new double[orders.size()];
-        
+
         vector<DistanceAndNode*> temp;
 
-        double min= INT_MAX;
+        double min = INT_MAX;
 
         for (int j = 0;j < orders.size();j++) {
-            
+
             //i번째기사가 음식점을 거쳐서 j번째 주문자에게 도달하기위한 최단거리
             distance_arr[i][j] =
                 map.map_cost[orders[j]->store.getLocation().node][drivers[i].getCurrentLocation().node]
@@ -63,10 +63,10 @@ void DeliverySystemWithSystemSelection::Selection() {
         for (int j = 0;j < orders.size();j++) {
             distance_arr[i][j] -= min;
 
-            temp.push_back(new DistanceAndNode(distance_arr[i][j], i,j));
+            temp.push_back(new DistanceAndNode(distance_arr[i][j], i, j));
         }
 
-        sort(temp.begin(), temp.end(),sort_dis);
+        sort(temp.begin(), temp.end(), sort_dis);
 
         vector_arr.push_back(temp);
     }
@@ -80,7 +80,7 @@ void DeliverySystemWithSystemSelection::Selection() {
             cout << "에러" << endl;
         }
 
-        if (vector_arr.size() == 1){   //남은 기사가 한명
+        if (vector_arr.size() == 1) {   //남은 기사가 한명
             result.push_back(vector_arr[0][0]);
 
             for (int i = 1; i < vector_arr[0].size(); i++)
@@ -144,5 +144,6 @@ void DeliverySystemWithSystemSelection::Selection() {
         delete result[i];
     }
 }
+
 
 #endif
