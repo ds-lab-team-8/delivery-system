@@ -57,6 +57,9 @@ public:
 
     Location find_route(const Location& crt, const Location& trg); //crt에 위치했을때 trg로 가려면 어느 노드로 가야하는지 반환
 
+    double** map_pos;  //map의 연결정보를 담은 행렬그래프.   map[1][3]=5 이면 items[3] 에서 items[1]로 가는 길은 5의 시간을 소모한다는 의미이다.
+    double** map_cost;   //items[j]에서 출발해서 items[i]로 도착하기위한 최단시간을 map_cost[i][j]로 저장한 행렬
+
     vector<Location> nodes;
 private:
     int width;
@@ -66,8 +69,7 @@ private:
 
     
 
-    double** map_pos;  //map의 연결정보를 담은 행렬그래프.   map[1][3]=5 이면 items[3] 에서 items[1]로 가는 길은 5의 시간을 소모한다는 의미이다.
-    double** map_cost;   //items[j]에서 출발해서 items[i]로 도착하기위한 최단시간을 map_cost[i][j]로 저장한 행렬
+
     void loop_cost(vector<int> check, double* temp, int node);
 };
 
