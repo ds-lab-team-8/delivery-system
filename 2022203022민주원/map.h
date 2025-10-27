@@ -113,7 +113,7 @@ void Map::addItem(MapItem& item) {                                // 맵 아이�
 
 void Map::addLocation(Location& pos) {                                // 맵 아이템 추가
     nodes.push_back(pos);
-    pos.node = node.size() - 1;
+    pos.node = nodes.size() - 1;
 }
 
 vector<MapItem> Map::getAllItems() const {                              // 모든 맵 아이템 반환
