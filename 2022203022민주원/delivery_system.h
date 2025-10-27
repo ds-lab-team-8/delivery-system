@@ -32,6 +32,9 @@ public:
     void completeDelivery(int orderId);   // 특정 주문을 배달 완료 (주문 상태 변경)
 
 
+//호환 안되는 부분
+//호환 안되는 부분
+//호환 안되는 부분
     Map map;
     vector<Orderer> orderers;
     vector<Driver> drivers;
