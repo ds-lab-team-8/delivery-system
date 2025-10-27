@@ -54,8 +54,8 @@ void DeliverySystemWithSystemSelection::Selection() {
             
             //i번째기사가 음식점을 거쳐서 j번째 주문자에게 도달하기위한 최단거리
             distance_arr[i][j] =
-                map[orders[j].store.getLocation().node][drivers[i].getCurrentLocation().node]
-                + map[orders[j].orderer.getLocation().node][orders[j].store.getLocation().node];
+                map.map_cost[orders[j]->store.getLocation().node][drivers[i].getCurrentLocation().node]
+                + map.map_cost[orders[j]->orderer.getLocation().node][orders[j]->store.getLocation().node];
 
             if (distance_arr[i][j] < min) min = distance_arr[i][j];
         }
