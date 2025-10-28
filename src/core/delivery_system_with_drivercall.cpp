@@ -2,6 +2,7 @@
 #include <set>
 #include <vector>
 #include <utility>
+#include <algorithm>
 #include "delivery_system_with_drivercall.h"
 
 using namespace std;
@@ -10,12 +11,18 @@ DeliverySystemWithDriverCall::DeliverySystemWithDriverCall() : DeliverySystem() 
 
 DeliverySystemWithDriverCall::~DeliverySystemWithDriverCall() = default;                            // 부모 소멸자 호출
 
-void DeliverySystemWithDriverCall::acceptCall(int /*orderId*/) {                                // 이 경우 orderId는 사용되지 않음
+void DeliverySystemWithDriverCall::acceptCall() {
     set<int> assignedOrderIds;
+
+    vector<Driver>& drivers = getDrivers();
+	vector<Order*>& orders = getOrders();
+	vector<Store>& stores = getStores();
+	vector<Orderer>& orderers = getOrderers();
+	Map& map = getMap();
 
     for (Driver& driver : drivers) {
         if (!driver.isAvailable()) continue;                                                    // 사용 가능한 기사만 고려
-
+        
         using OrderDist = pair<double, Order*>;
         priority_queue<OrderDist, vector<OrderDist>, greater<OrderDist>> orderHeap;             // 최소 힙 (거리 기준)
 
@@ -35,8 +42,8 @@ void DeliverySystemWithDriverCall::acceptCall(int /*orderId*/) {                
                 if (ordererIt == orderers.end()) continue;
                 const Location& ordererLoc = ordererIt->getLocation();
 
-                double distToStore = map.calculateShortestDistance(driver.getCurrentLocation(), storeLoc);  // 기사 → 가게, 가게 → 주문자 최단거리 합산
-                double distToOrderer = map.calculateShortestDistance(storeLoc, ordererLoc);
+                double distToStore = map.GetMap_cost(driver.getCurrentLocation(), storeLoc);  // 기사 → 가게, 가게 → 주문자 최단거리 합산
+                double distToOrderer = map.GetMap_cost(storeLoc, ordererLoc);
                 double totalDist = distToStore + distToOrderer;
 
                 orderHeap.push({ totalDist, order });                                                       // 거리와 주문 쌍을 힙에 추가

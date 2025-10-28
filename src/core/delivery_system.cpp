@@ -2,6 +2,8 @@
 #include <algorithm>
 #include "delivery_system.h"
 
+using namespace std;
+
 DeliverySystem::DeliverySystem() : map(100, 100) {}                                 // 기본 맵 크기를 100x100으로 설정
 
 DeliverySystem::~DeliverySystem() {                                                 // 소멸자에서 동적 할당된 주문 객체들 해제                                           
@@ -59,7 +61,7 @@ void DeliverySystem::requestCallsToDrivers() {
     }
 }
 
-void DeliverySystem::acceptCall(int orderId) {                                      // 특정 주문에 대해 배차 요청 수락
+void DeliverySystem::acceptCall() {                                             // 특정 주문에 대해 배차 요청 수락
     // DeliverySystem_drivercall 인지 DeliverySystem_systemselection 인지에 따라 변동될 메서드
     // 오버라이드해 구현해두었음(DeliverySystem_drivercall에서는 orderid를 사용하지 않음)
 }
