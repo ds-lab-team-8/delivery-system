@@ -115,6 +115,10 @@ int Map::GetMap_pos(int crt, int trg) {
     return map_pos[trg][crt];
 }
 
+double Map::GetMap_cost(int crt,int trg){
+    return map_cost[trg][crt];
+}
+
 void Map::loop_cost(vector<int> check, double* temp, int node) {  //map_cost를 세팅하기위한 재귀함수
     check.push_back(node);
 
