@@ -23,8 +23,8 @@ public:
     void addOrder(const Order& order);
 
     // 배차 및 주문 처리 단계의 메서드들
-    void requestCallsToDrivers();   // 현재 orders 내에 있는 모든 주문들을 drivers에게 배차 요청 (driver의 배차 큐에 추가)
-    void acceptCall();   // 특정 주문을 배차 요청에 수락 (driver가 호출)
+	// void requestCallsToDrivers();   // 현재 orders 내에 있는 모든 주문들을 drivers에게 배차 요청 (driver의 배차 큐에 추가)
+	void acceptCall();   // 특정 주문을 배차 요청에 수락 (driver가 호출)
 	void statusUpdate();          // 주문 상태 업데이트용 메서드 (픽업 완료, 배달 완료 시점 업데이트용)
 
     /*
@@ -51,3 +51,4 @@ private:
 
 
 #endif
+
