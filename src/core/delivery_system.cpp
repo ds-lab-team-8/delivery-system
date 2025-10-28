@@ -4,70 +4,70 @@
 
 using namespace std;
 
-DeliverySystem::DeliverySystem() : map(100, 100) {}                                 // ±âº» ¸Ê Å©±â¸¦ 100x100À¸·Î ¼³Á¤
+DeliverySystem::DeliverySystem() : map(100, 100) {}                                 // ê¸°ë³¸ ë§µ í¬ê¸°ë¥¼ 100x100ìœ¼ë¡œ ì„¤ì •
 
-DeliverySystem::~DeliverySystem() {                                                 // ¼Ò¸êÀÚ¿¡¼­ µ¿Àû ÇÒ´çµÈ ÁÖ¹® °´Ã¼µé ÇØÁ¦                                           
+DeliverySystem::~DeliverySystem() {                                                 // ì†Œë©¸ìì—ì„œ ë™ì  í• ë‹¹ëœ ì£¼ë¬¸ ê°ì²´ë“¤ í•´ì œ                                           
     for (Order* order : orders) {
         delete order;
     }
 }
 
-void DeliverySystem::addOrderer(const Orderer& orderer) {                           // ÁÖ¹®ÀÚ Ãß°¡
+void DeliverySystem::addOrderer(const Orderer& orderer) {                           // ì£¼ë¬¸ì ì¶”ê°€
     orderers.push_back(orderer);
     map.addItem(MapItem(orderer.getLocation(), ORDERER, orderer.getId()));
 }
 
-void DeliverySystem::addStore(const Store& store) {                                 // °¡°Ô Ãß°¡
+void DeliverySystem::addStore(const Store& store) {                                 // ê°€ê²Œ ì¶”ê°€
     stores.push_back(store);
     map.addItem(MapItem(store.getLocation(), STORE, store.getId()));
 }
 
-void DeliverySystem::addDriver(const Driver& driver) {                              // ±â»ç Ãß°¡
+void DeliverySystem::addDriver(const Driver& driver) {                              // ê¸°ì‚¬ ì¶”ê°€
     drivers.push_back(driver);
     map.addItem(MapItem(driver.getCurrentLocation(), DRIVER, driver.getId()));
 }
 
-void DeliverySystem::addOrder(const Order& order) {                                 // ÁÖ¹® Ãß°¡
+void DeliverySystem::addOrder(const Order& order) {                                 // ì£¼ë¬¸ ì¶”ê°€
     Order* newOrder = new Order(
         order.getOrderId(),
         order.getOrdererId(),
         order.getStoreId(),
         order.getDeliveryLocation()
-    );                                                                          // µ¿Àû ÇÒ´çµÈ ÁÖ¹® °´Ã¼ »ı¼º
+    );                                                                          // ë™ì  í• ë‹¹ëœ ì£¼ë¬¸ ê°ì²´ ìƒì„±
 
-    orders.push_back(newOrder);                                                 // ÇØ´ç ÁÖ¹®À» ¹Ş´Â °¡°Ô¸¦ Ã£¾Æ¼­ ÁÖ¹® Å¥¿¡ Ãß°¡
+    orders.push_back(newOrder);                                                 // í•´ë‹¹ ì£¼ë¬¸ì„ ë°›ëŠ” ê°€ê²Œë¥¼ ì°¾ì•„ì„œ ì£¼ë¬¸ íì— ì¶”ê°€
 
     auto it = find_if(stores.begin(), stores.end(), [&](const Store& store) {
         return store.getId() == order.getStoreId();
-        });                                                                         // ÇØ´ç ÁÖ¹®À» ¹Ş´Â °¡°Ô Ã£±â
+        });                                                                         // í•´ë‹¹ ì£¼ë¬¸ì„ ë°›ëŠ” ê°€ê²Œ ì°¾ê¸°
     if (it != stores.end()) {
-        it->receiveOrder(newOrder);                                             // °¡°ÔÀÇ ÁÖ¹® Å¥¿¡ ÁÖ¹® Ãß°¡
+        it->receiveOrder(newOrder);                                             // ê°€ê²Œì˜ ì£¼ë¬¸ íì— ì£¼ë¬¸ ì¶”ê°€
     }
     else {
         cerr << "Error: Store with ID " << order.getStoreId() << " not found." << endl;
-    }                                                                           // °¡°Ô°¡ Á¸ÀçÇÏÁö ¾Ê´Â °æ¿ì ¿¡·¯ ¸Ş½ÃÁö Ãâ·Â                                                                    
+    }                                                                           // ê°€ê²Œê°€ ì¡´ì¬í•˜ì§€ ì•ŠëŠ” ê²½ìš° ì—ëŸ¬ ë©”ì‹œì§€ ì¶œë ¥                                                                    
 }
-
+/*
 void DeliverySystem::requestCallsToDrivers() {
     for (Order* order : orders) {
-        if (order->getStatus() == ORDER_ACCEPTED) {                             // ¾ÆÁ÷ ¹èÂ÷µÇÁö ¾ÊÀº ÁÖ¹®¿¡ ´ëÇØ¼­¸¸ Ã³¸®
+        if (order->getStatus() == ORDER_ACCEPTED) {                             // ì•„ì§ ë°°ì°¨ë˜ì§€ ì•Šì€ ì£¼ë¬¸ì— ëŒ€í•´ì„œë§Œ ì²˜ë¦¬
             auto it = find_if(stores.begin(), stores.end(), [&](const Store& store) {
                 return store.getId() == order->getStoreId();
                 });
             if (it != stores.end() && it->hasOrdersWaiting()) {
-                it->requestDriverCall(this);                                    // °¡°Ô¿¡¼­ ¹èÂ÷ ¿äÃ»
-            }                                                                   // ÇØ´ç ÁÖ¹®À» ¹Ş´Â °¡°Ô¸¦ Ã£¾Æ¼­ ÁÖ¹® Å¥ È®ÀÎ
+                it->requestDriverCall(this);                                    // ê°€ê²Œì—ì„œ ë°°ì°¨ ìš”ì²­
+            }                                                                   // í•´ë‹¹ ì£¼ë¬¸ì„ ë°›ëŠ” ê°€ê²Œë¥¼ ì°¾ì•„ì„œ ì£¼ë¬¸ í í™•ì¸
         }
     }
 }
-
-void DeliverySystem::acceptCall() {                                             // Æ¯Á¤ ÁÖ¹®¿¡ ´ëÇØ ¹èÂ÷ ¿äÃ» ¼ö¶ô
-    // DeliverySystem_drivercall ÀÎÁö DeliverySystem_systemselection ÀÎÁö¿¡ µû¶ó º¯µ¿µÉ ¸Ş¼­µå
-    // ¿À¹ö¶óÀÌµåÇØ ±¸ÇöÇØµÎ¾úÀ½(DeliverySystem_drivercall¿¡¼­´Â orderid¸¦ »ç¿ëÇÏÁö ¾ÊÀ½)
+*/
+void DeliverySystem::acceptCall() {                                             // íŠ¹ì • ì£¼ë¬¸ì— ëŒ€í•´ ë°°ì°¨ ìš”ì²­ ìˆ˜ë½
+    // DeliverySystem_drivercall ì¸ì§€ DeliverySystem_systemselection ì¸ì§€ì— ë”°ë¼ ë³€ë™ë  ë©”ì„œë“œ
+    // ì˜¤ë²„ë¼ì´ë“œí•´ êµ¬í˜„í•´ë‘ì—ˆìŒ(DeliverySystem_drivercallì—ì„œëŠ” orderidë¥¼ ì‚¬ìš©í•˜ì§€ ì•ŠìŒ)
 }
 
-void DeliverySystem::completePickup(int orderId) {                                      // Æ¯Á¤ ÁÖ¹®¿¡ ´ëÇØ ÇÈ¾÷ ¿Ï·á
-    auto orderIt = find_if(orders.begin(), orders.end(), [&](Order* order) {        // ÁÖ¹® ID·Î ÁÖ¹® °´Ã¼¸¦ Ã£¾Æ ÁÖ¹® »óÅÂ º¯°æ
+void DeliverySystem::completePickup(int orderId) {                                      // íŠ¹ì • ì£¼ë¬¸ì— ëŒ€í•´ í”½ì—… ì™„ë£Œ
+    auto orderIt = find_if(orders.begin(), orders.end(), [&](Order* order) {        // ì£¼ë¬¸ IDë¡œ ì£¼ë¬¸ ê°ì²´ë¥¼ ì°¾ì•„ ì£¼ë¬¸ ìƒíƒœ ë³€ê²½
         return order->getOrderId() == orderId;
         });
     if (orderIt == orders.end()) {
@@ -78,8 +78,8 @@ void DeliverySystem::completePickup(int orderId) {                              
     order->completePickup();
 }
 
-void DeliverySystem::completeDelivery(int orderId) {                                    // Æ¯Á¤ ÁÖ¹®¿¡ ´ëÇØ ¹è´Ş ¿Ï·á
-    auto orderIt = find_if(orders.begin(), orders.end(), [&](Order* order) {        // ÁÖ¹® ID·Î ÁÖ¹® °´Ã¼¸¦ Ã£¾Æ ÁÖ¹® »óÅÂ º¯°æ
+void DeliverySystem::completeDelivery(int orderId) {                                    // íŠ¹ì • ì£¼ë¬¸ì— ëŒ€í•´ ë°°ë‹¬ ì™„ë£Œ
+    auto orderIt = find_if(orders.begin(), orders.end(), [&](Order* order) {        // ì£¼ë¬¸ IDë¡œ ì£¼ë¬¸ ê°ì²´ë¥¼ ì°¾ì•„ ì£¼ë¬¸ ìƒíƒœ ë³€ê²½
         return order->getOrderId() == orderId;
         });
     if (orderIt == orders.end()) {
@@ -89,7 +89,7 @@ void DeliverySystem::completeDelivery(int orderId) {                            
     Order* order = *orderIt;
     order->completeDelivery();
 
-    auto driverIt = find_if(drivers.begin(), drivers.end(), [&](Driver& driver) {   // ÇØ´ç ÁÖ¹®À» Ã³¸®ÇÑ ±â»ç¸¦ Ã£¾Æ¼­ ±â»ç »óÅÂ ¾÷µ¥ÀÌÆ®
+    auto driverIt = find_if(drivers.begin(), drivers.end(), [&](Driver& driver) {   // í•´ë‹¹ ì£¼ë¬¸ì„ ì²˜ë¦¬í•œ ê¸°ì‚¬ë¥¼ ì°¾ì•„ì„œ ê¸°ì‚¬ ìƒíƒœ ì—…ë°ì´íŠ¸
         return driver.getId() == order->getDriverId();
         });
     if (driverIt != drivers.end()) {
@@ -100,37 +100,38 @@ void DeliverySystem::completeDelivery(int orderId) {                            
     }
 }
 
-void DeliverySystem::statusUpdate() {                                                // ÁÖ¹® »óÅÂ Á¡°Ë¿ë ¸Ş¼­µå
+void DeliverySystem::statusUpdate() {                                                // ì£¼ë¬¸ ìƒíƒœ ì ê²€ìš© ë©”ì„œë“œ
     for (Order* order : orders) {
         OrderStatus status = order->getStatus();
 
-        auto driverIt = find_if(drivers.begin(), drivers.end(), [&](const Driver& driver) {         // ±â»ç À§Ä¡ Ã£±â
+        auto driverIt = find_if(drivers.begin(), drivers.end(), [&](const Driver& driver) {         // ê¸°ì‚¬ ìœ„ì¹˜ ì°¾ê¸°
             return driver.getId() == order->getDriverId();
             });
         if (driverIt == drivers.end()) continue;
         const Location& driverLoc = driverIt->getCurrentLocation();
 
-        auto storeIt = find_if(stores.begin(), stores.end(), [&](const Store& store) {              // °¡°Ô À§Ä¡ Ã£±â
+        auto storeIt = find_if(stores.begin(), stores.end(), [&](const Store& store) {              // ê°€ê²Œ ìœ„ì¹˜ ì°¾ê¸°
             return store.getId() == order->getStoreId();
             });
         if (storeIt == stores.end()) continue;
         const Location& storeLoc = storeIt->getLocation();
 
-        auto ordererIt = find_if(orderers.begin(), orderers.end(), [&](const Orderer& orderer) {    // ÁÖ¹®ÀÚ À§Ä¡ Ã£±â
+        auto ordererIt = find_if(orderers.begin(), orderers.end(), [&](const Orderer& orderer) {    // ì£¼ë¬¸ì ìœ„ì¹˜ ì°¾ê¸°
             return orderer.getId() == order->getOrdererId();
             });
         if (ordererIt == orderers.end()) continue;
         const Location& ordererLoc = ordererIt->getLocation();
 
-        if (status == DRIVER_CALL_ACCEPTED &&                                       // Äİ ¼ö¶ô ÈÄ ±â»ç À§Ä¡°¡ °¡°Ô À§Ä¡¿Í °°À¸¸é ÇÈ¾÷ ¿Ï·á
+        if (status == DRIVER_CALL_ACCEPTED &&                                       // ì½œ ìˆ˜ë½ í›„ ê¸°ì‚¬ ìœ„ì¹˜ê°€ ê°€ê²Œ ìœ„ì¹˜ì™€ ê°™ìœ¼ë©´ í”½ì—… ì™„ë£Œ
             driverLoc.getX() == storeLoc.getX() && driverLoc.getY() == storeLoc.getY()) {
             order->completePickup();
         }
 
-        else if (status == PICKUP_COMPLETE &&                                       // ÇÈ¾÷ ¿Ï·á ÈÄ ±â»ç À§Ä¡°¡ ÁÖ¹®ÀÚ À§Ä¡¿Í °°À¸¸é ¹è´Ş ¿Ï·á
+        else if (status == PICKUP_COMPLETE &&                                       // í”½ì—… ì™„ë£Œ í›„ ê¸°ì‚¬ ìœ„ì¹˜ê°€ ì£¼ë¬¸ì ìœ„ì¹˜ì™€ ê°™ìœ¼ë©´ ë°°ë‹¬ ì™„ë£Œ
             driverLoc.getX() == ordererLoc.getX() && driverLoc.getY() == ordererLoc.getY()) {
             order->completeDelivery();
             driverIt->completeDelivery(order->getOrderId());
         }
     }
 }
+
