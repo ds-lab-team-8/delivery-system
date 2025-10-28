@@ -29,6 +29,9 @@ class Order {
         Location getDeliveryLocation() const;
         OrderStatus getStatus() const;
 
+        const Orderer& getOrderer() const;
+        const Store& getStore() const;
+
         // Order status management
         void acceptOrder();                     // 주문 수락 (상태 변경)
         void assignDriver(int driverId);        // 기사 할당 (상태 변경 및 driverId 지정)
@@ -45,6 +48,9 @@ class Order {
         int driverId;
         Location deliveryLocation;
         OrderStatus status;
+
+        Orderer orderer;
+        Store store;
 };
 
 #endif
