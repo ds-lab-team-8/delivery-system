@@ -2,59 +2,166 @@
 
 using namespace std;
 
-MapItem::MapItem(const Location& location, ItemType itemType, int id)   // ¸Ê ¾ÆÀÌÅÛ ÃÊ±âÈ­ ÀÛ¾÷
+MapItem::MapItem(const Location& location, ItemType itemType, int id)   // ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ê±ï¿½È­ ï¿½Û¾ï¿½
     : location(location), itemType(itemType), id(id) {
 }
 
-MapItem::~MapItem() {}                                                  // ¸Ê ¾ÆÀÌÅÛ ¼Ò¸êÀÚ
+MapItem::~MapItem() {}                                                  // ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ò¸ï¿½ï¿½ï¿½
 
-Location MapItem::getLocation() const {                                 // À§Ä¡ Á¤º¸ ¹İÈ¯
+Location MapItem::getLocation() const {                                 // ï¿½ï¿½Ä¡ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È¯
     return location;
 }
 
 ItemType MapItem::getItemType() const {
     return itemType;
-}                                                                       // ¾ÆÀÌÅÛ Å¸ÀÔ ¹İÈ¯
+}                                                                       // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Å¸ï¿½ï¿½ ï¿½ï¿½È¯
 
 int MapItem::getId() const {
     return id;
-}                                                                       // ¾ÆÀÌÅÛ ID ¹İÈ¯
+}                                                                       // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ID ï¿½ï¿½È¯
 
-void MapItem::setLocation(const Location& newLocation) {                // À§Ä¡ Á¤º¸ ¾÷µ¥ÀÌÆ®
+void MapItem::setLocation(const Location& newLocation) {                // ï¿½ï¿½Ä¡ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ®
     location = newLocation;
 }
 
-Map::Map(int width, int height) : width(width), height(height) {}       // ¸Ê ÃÊ±âÈ­ ÀÛ¾÷ (¿¹: ±×·¡ÇÁ ÃÊ±âÈ­ µî)
+Map::Map(int width, int height) : width(width), height(height) {}       // ï¿½ï¿½ ï¿½Ê±ï¿½È­ ï¿½Û¾ï¿½ (ï¿½ï¿½: ï¿½×·ï¿½ï¿½ï¿½ ï¿½Ê±ï¿½È­ ï¿½ï¿½)
 
-Map::~Map() {}                                                          // ¸Ê ¼Ò¸êÀÚ
+Map::~Map() {                                                          // ë§µ ì†Œë©¸ì
+    for (int i = 0;i < nodes.size();i++) {
+        delete[] map_pos[i];
+        delete[] map_cost[i];
+    }
 
-void Map::addItem(const MapItem& item) {                                // ¸Ê ¾ÆÀÌÅÛ Ãß°¡
+    delete[] map_pos;
+    delete[] map_cost;
+
+}
+
+void Map::addItem(const MapItem& item) {                                // ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ß°ï¿½
     items.push_back(item);
 }
 
-vector<MapItem> Map::getAllItems() const {                              // ¸ğµç ¸Ê ¾ÆÀÌÅÛ ¹İÈ¯
+void Map::addLocation(Location& pos) {                                // ë§µ ì•„ì´í…œ ì¶”ê°€
+    nodes.push_back(pos);
+    pos.node = nodes.size() - 1;
+}
+
+vector<MapItem> Map::getAllItems() const {                              // ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È¯
     return items;
 }
 
-int Map::getWidth() const {                                             // ¸ÊÀÇ ³Êºñ ¹İÈ¯
+int Map::getWidth() const {                                             // ï¿½ï¿½ï¿½ï¿½ ï¿½Êºï¿½ ï¿½ï¿½È¯
     return width;
 }
 
-int Map::getHeight() const {                                            // ¸ÊÀÇ ³ôÀÌ ¹İÈ¯
+int Map::getHeight() const {                                            // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È¯
     return height;
 }
 
-void Map::addEdge(const Location& from, const Location& to, double weight) {                // ±×·¡ÇÁ °£¼± Ãß°¡
-    adjacencyList[from].push_back(make_pair(to, weight));
-    adjacencyList[to].push_back(make_pair(from, weight));                                   // ¹«¹æÇâ ±×·¡ÇÁÀÌ¹Ç·Î ¾ç¹æÇâ °£¼± Ãß°¡
+void Map::SetMap(int** arr) {
+    map_pos = new double*[nodes.size()];
+    for (int i = 0; i < nodes.size(); i++)
+    {
+        map_pos[i] = new double[nodes.size()];
+    }
+
+
+    for (int i = 0;i < nodes.size();i++) {
+        for (int j = 0;j < nodes.size();j++) {
+            if (arr[i][j] == 1) {
+                map_pos[i][j] = nodes[i].calculateDistance(nodes[j]); //iì™€ jì‚¬ì´ì˜ ê±°ë¦¬ëŠ” ì¶”í›„ì— ì„ì˜ë¡œ ìˆ˜ì •ê°€ëŠ¥í•œ ì½”ë“œ
+            }
+            else if (arr[i][j] == 0) {
+                map_pos[i][j] = -1;   //inf ì·¨ê¸‰
+            }
+        }
+    }
+
+    map_cost = new double* [nodes.size()];
+    for (int i = 0; i < nodes.size(); i++)
+    {
+        map_cost[i] = new double[nodes.size()];
+    }
+
+    for (int j = 0; j < nodes.size(); j++)
+    {
+        double* temp = new double[nodes.size()];
+        for (int i = 0; i < nodes.size(); i++)
+        {
+            temp[i] = INT_MAX;
+        }
+        temp[j] = 0;
+
+        vector<int> v;
+        loop_cost(v, temp, j);
+
+        for (int i = 0; i < nodes.size(); i++)
+        {
+            map_cost[j][i] = temp[i];
+        }
+
+        delete temp;
+    }
+
+
+    for (int i = 0;i < nodes.size();i++) {
+        delete[] arr[i];
+    }
+
+    delete[] arr;
 }
 
-double Map::calculateShortestDistance(const Location& from, const Location& to) const {       // ´ÙÀÍ½ºÆ®¶ó ¾Ë°í¸®ÁòÀ» ÀÌ¿ëÇÑ ÃÖ´Ü °Å¸® °è»ê
-    // ´ÙÀÍ½ºÆ®¶ó ¾Ë°í¸®Áò ±¸Çö À§Ä¡
-    return 0.0;                     // ÀÓ½Ã ¹İÈ¯°ª
+int Map::GetMap_pos(int crt, int trg) {
+    return map_pos[trg][crt];
 }
 
-vector<Location> Map::getShortestPath(const Location& from, const Location& to) const {     // ´ÙÀÍ½ºÆ®¶ó ¾Ë°í¸®ÁòÀ» ÀÌ¿ëÇÑ ÃÖ´Ü °æ·Î ¹İÈ¯
-    // ´ÙÀÍ½ºÆ®¶ó ¾Ë°í¸®Áò ±¸Çö À§Ä¡
-    return vector<Location>();      // ÀÓ½Ã ¹İÈ¯°ª
+void Map::loop_cost(vector<int> check, double* temp, int node) {  //map_costë¥¼ ì„¸íŒ…í•˜ê¸°ìœ„í•œ ì¬ê·€í•¨ìˆ˜
+    check.push_back(node);
+
+
+    int* crr = new int[nodes.size()];
+    for (int i = 0; i < nodes.size(); i++)
+    {
+        crr[i] = 0;
+    }
+
+    for (int i = 0; i < check.capacity(); i++)
+    {
+        crr[check.at(i)] = 1;
+    }
+
+    for (int i = 0; i < nodes.size(); i++)
+    {
+        if (crr[i] == 1 || map_pos[node][i] < 0)continue;
+
+
+        double cost = temp[node] + map_pos[node][i];
+        if (cost < temp[i]) {
+            temp[i] = cost;
+            loop_cost(check, temp, i);
+        }
+    }
+
+    delete crr;
+}
+
+Location  Map::find_route(const Location& crt, const Location& trg) {
+    int crtNode = crt.node;
+    int trgNode = trg.node;
+
+    double min = INT_MAX;
+    int result = -1;
+
+    for (int i = 0; i < nodes.size(); i++)
+    {
+        if (map_pos[i][crtNode] <= 0) continue;
+
+        double cost = map_pos[i][crtNode] + map_cost[trgNode][i];
+        if (cost < min) {
+            min = cost;
+            result = i;
+        }
+    }
+
+    return nodes[result];
 }
