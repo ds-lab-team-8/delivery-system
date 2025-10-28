@@ -3,10 +3,13 @@
 #include <cmath>
 
 //Constructor
-Location::Location() : x(0), y(0) {
+Location::Location() : x(0), y(0), node(-1) { 
 }
 
-Location::Location(int x_in, int y_in) : x(x_in), y(y_in) {
+Location::Location(int x_in, int y_in) : x(x_in), y(y_in), node(-1) {
+}
+
+Location::Location(int x_in, int y_in, int node__in) x(x_in), y(y_in), node(node_in)) {
 }
 
 //Destructor
@@ -22,10 +25,18 @@ int Location::getY() const {
     return y;
 }
 
+int Location::getNode() const {
+    reutnr node;
+}
+
 // Setters
 void Location::updateLocation(int new_x, int new_y) {
     x = new_x;
     y = new_y;
+}
+
+void Location::setNode(int node_in) }
+    node = node_in;
 }
 
 // Utility methods
@@ -40,4 +51,5 @@ bool Location::operator==(const Location& other) const {
 
 bool Location::operator!=(const Location& other) const {
     return !(*this == other);
+
 }
