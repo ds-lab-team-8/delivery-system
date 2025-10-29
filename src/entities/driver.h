@@ -20,6 +20,7 @@ class Driver {
         int getId() const;
         string getName() const;
         Location getCurrentLocation() const;
+        bool isAvailable() const;
 
         // Location management
         void updateLocation(const Location& newLocation);
