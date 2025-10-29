@@ -92,18 +92,24 @@ void Simulator::switchSystemType(SystemType newType) {
             break;
     }
     
+    if (!deliverySystem) return;
+    
     for (const Orderer& orderer : orderers) {
-        if (deliverySystem) deliverySystem->addOrderer(orderer);
+        deliverySystem->addOrderer(orderer);
     }
     for (const Driver& driver : drivers) {
-        if (deliverySystem) deliverySystem->addDriver(driver);
+        deliverySystem->addDriver(driver);
     }
     for (const Store& store : stores) {
-        if (deliverySystem) deliverySystem->addStore(store);
+        deliverySystem->addStore(store);
     }
+    
     for (Order* order : orders) {
-        if (deliverySystem) deliverySystem->addOrder(*order);
+        deliverySystem->addOrder(*order);
     }
+    
+    deliverySystem->initializeMap();
+    cout << "[시스템] Map 초기화 완료" << endl;
 }
 
 void Simulator::simulateWithUserInput() {
@@ -364,7 +370,7 @@ void Simulator::simulateWithUserInput() {
                      << ", 배달 위치: (" << x << ", " << y << ")" << endl;
             }
 
-        } else if (cmd == "add_all_random") {
+        } else if (cmd == "add_all_random" || cmd == "aar") {
             int nOrderers, nDrivers, nStores, nOrders;
             iss >> nOrderers >> nDrivers >> nStores >> nOrders;
 
@@ -486,7 +492,7 @@ void Simulator::simulateWithUserInput() {
         } else if (cmd == "list") {
             listAll();
 
-        } else if (cmd == "switch_system") {
+        } else if (cmd == "switch_system" || cmd == "ss") {
             string systemTypeStr;
             iss >> systemTypeStr;
             
@@ -500,7 +506,7 @@ void Simulator::simulateWithUserInput() {
                 cout << "잘못된 시스템 타입입니다. (mock, driver_call, system_selection 중 하나를 입력하세요)" << endl;
             }
 
-        } else if (cmd == "start") {
+        } else if (cmd == "start" || cmd == "s") {
             cout << "\n시뮬레이션을 시작합니다...\n" << endl;
             runSimulation();
 
@@ -571,10 +577,11 @@ void Simulator::runSimulation() {
     if (systemType != MOCK) {
         deliverySystem->acceptCall();
         
-        for (Order* order : orders) {
-            if (order->getDriverId() != -1 && !orderAssigned[order->getOrderId()]) {
+        vector<Order*>& systemOrders = deliverySystem->getAllOrders();
+        
+        for (Order* order : systemOrders) {
+            if (order->getDriverId() != -1) {
                 int driverId = order->getDriverId();
-                orderAssigned[order->getOrderId()] = true;
                 
                 const Store* orderStore = order->getStore();
                 if (!orderStore) continue;
@@ -1017,13 +1024,13 @@ void Simulator::printHelp() {
     cout << "    - n개의 매장을 랜덤으로 추가합니다." << endl;
     cout << "  add_order_random <n>" << endl;
     cout << "    - n개의 주문을 랜덤으로 추가합니다." << endl;
-    cout << "  add_all_random <nOrderers> <nDrivers> <nStores> <nOrders>" << endl;
+    cout << "  add_all_random <nOrderers> <nDrivers> <nStores> <nOrders> (별칭: aar)" << endl;
     cout << "    - 주문자, 기사, 매장, 주문을 한 번에 랜덤으로 추가합니다." << endl;
     cout << "  list" << endl;
     cout << "    - 모든 주문자, 기사, 매장, 주문을 조회합니다." << endl;
-    cout << "  switch_system <type>" << endl;
+    cout << "  switch_system <type> (별칭: ss)" << endl;
     cout << "    - 배달 시스템 타입을 변경합니다. (mock, driver_call, system_selection)" << endl;
-    cout << "  start" << endl;
+    cout << "  start (별칭: s)" << endl;
     cout << "    - 시뮬레이션을 시작합니다." << endl;
     cout << "  help" << endl;
     cout << "    - 도움말을 출력합니다." << endl;
