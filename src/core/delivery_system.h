@@ -28,6 +28,10 @@ public:
 	void statusUpdate();          // 주문 상태 업데이트용 메서드 (픽업 완료, 배달 완료 시점 업데이트용)
     void completePickup(int orderId);   // 특정 주문을 픽업 완료 (주문 상태 변경)
     void completeDelivery(int orderId);   // 특정 주문을 배달 완료 (주문 상태 변경)
+    
+    // 시뮬레이터를 위한 조회 메서드
+    vector<Order*>& getAllOrders() { return orders; }
+    void initializeMap();
 
 protected:
 	// getters

@@ -12,28 +12,41 @@ DeliverySystem::~DeliverySystem() {                                             
     }
 }
 
-void DeliverySystem::addOrderer(const Orderer& orderer) {                           // 주문자 추가
+void DeliverySystem::addOrderer(const Orderer& orderer) {
     orderers.push_back(orderer);
-    map.addItem(MapItem(orderer.getLocation(), ORDERER, orderer.getId()));
+    Location loc = orderer.getLocation();
+    map.addLocation(loc);
+    orderers.back().setLocationNode(loc.node);
+    map.addItem(MapItem(orderers.back().getLocation(), ORDERER, orderer.getId()));
 }
 
-void DeliverySystem::addStore(const Store& store) {                                 // 가게 추가
+void DeliverySystem::addStore(const Store& store) {
     stores.push_back(store);
-    map.addItem(MapItem(store.getLocation(), STORE, store.getId()));
+    Location loc = store.getLocation();
+    map.addLocation(loc);
+    stores.back().setLocationNode(loc.node);
+    map.addItem(MapItem(stores.back().getLocation(), STORE, store.getId()));
 }
 
-void DeliverySystem::addDriver(const Driver& driver) {                              // 기사 추가
+void DeliverySystem::addDriver(const Driver& driver) {
     drivers.push_back(driver);
-    map.addItem(MapItem(driver.getCurrentLocation(), DRIVER, driver.getId()));
+    Location loc = driver.getCurrentLocation();
+    map.addLocation(loc);
+    drivers.back().setLocationNode(loc.node);
+    map.addItem(MapItem(drivers.back().getCurrentLocation(), DRIVER, driver.getId()));
 }
 
-void DeliverySystem::addOrder(const Order& order) {                                 // 주문 추가
+void DeliverySystem::addOrder(const Order& order) {
     Order* newOrder = new Order(
         order.getOrderId(),
         order.getOrdererId(),
         order.getStoreId(),
         order.getDeliveryLocation()
-    );                                                                          // 동적 할당된 주문 객체 생성
+    );
+    
+    Location deliveryLoc = newOrder->getDeliveryLocation();
+    map.addLocation(deliveryLoc);
+    newOrder->setDeliveryLocationNode(deliveryLoc.node);
 
     auto storeIt = find_if(stores.begin(), stores.end(), [&](const Store& store) {
         return store.getId() == order.getStoreId();
@@ -109,6 +122,21 @@ void DeliverySystem::completeDelivery(int orderId) {                            
     else {
         cerr << "Error: Driver with ID " << order->getDriverId() << " not found." << endl;
     }
+}
+
+void DeliverySystem::initializeMap() {
+    int nodeCount = map.nodes.size();
+    
+    if (nodeCount == 0) return;
+    
+    int** arr = new int*[nodeCount];
+    for (int i = 0; i < nodeCount; i++) {
+        arr[i] = new int[nodeCount];
+        for (int j = 0; j < nodeCount; j++) {
+            arr[i][j] = 1;
+        }
+    }
+    map.SetMap(arr);
 }
 
 void DeliverySystem::statusUpdate() {                                                // 주문 상태 점검용 메서드
