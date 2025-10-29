@@ -9,7 +9,7 @@ Location::Location() : x(0), y(0), node(-1) {
 Location::Location(int x_in, int y_in) : x(x_in), y(y_in), node(-1) {
 }
 
-Location::Location(int x_in, int y_in, int node__in) x(x_in), y(y_in), node(node_in)) {
+Location::Location(int x_in, int y_in, int node_in) : x(x_in), y(y_in), node(node_in) {
 }
 
 //Destructor
@@ -26,7 +26,7 @@ int Location::getY() const {
 }
 
 int Location::getNode() const {
-    reutnr node;
+    return node;
 }
 
 // Setters
@@ -35,7 +35,7 @@ void Location::updateLocation(int new_x, int new_y) {
     y = new_y;
 }
 
-void Location::setNode(int node_in) }
+void Location::setNode(int node_in) {
     node = node_in;
 }
 
