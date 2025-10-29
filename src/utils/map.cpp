@@ -129,7 +129,7 @@ void Map::loop_cost(vector<int> check, double* temp, int node) {  //map_cost를 
         crr[i] = 0;
     }
 
-    for (int i = 0; i < check.capacity(); i++)
+    for (int i = 0; i < (int)check.size(); i++)
     {
         crr[check.at(i)] = 1;
     }
