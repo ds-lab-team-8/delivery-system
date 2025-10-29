@@ -29,6 +29,10 @@ Location Driver::getCurrentLocation() const {
     return currentLocation;
 }
 
+bool Driver::isAvailable() const {
+    return available;
+}
+
 // Location management
 void Driver::updateLocation(const Location& newLocation) {
     currentLocation = newLocation;
@@ -52,4 +56,5 @@ void Driver::completeDelivery(int orderId) {
         if (orderQueue.empty()) available = true;
     }
     
+
 }
