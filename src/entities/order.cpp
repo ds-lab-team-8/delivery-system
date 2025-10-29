@@ -1,4 +1,6 @@
 #include "order.h"
+#include "orderer.h"
+#include "store.h"
 
 // Constructor
 Order::Order(int orderId_in, int ordererId_in, int storeId_in, const Location& deliveryLocation_in)
@@ -7,7 +9,9 @@ Order::Order(int orderId_in, int ordererId_in, int storeId_in, const Location& d
     storeId(storeId_in),
     deliveryLocation(deliveryLocation_in),
     driverId(-1), // 기사 배정 전 -> -1로 초기화
-    status(ORDER_REQUESTED) {
+    status(ORDER_REQUESTED),
+    orderer(nullptr),
+    store(nullptr) {
 }
 
 //Destructor
@@ -38,6 +42,23 @@ Location Order::getDeliveryLocation() const {
 
 OrderStatus Order::getStatus() const {
     return status;
+}
+
+const Orderer* Order::getOrderer() const {
+    return orderer;
+}
+
+const Store* Order::getStore() const {
+    return store;
+}
+
+// Setters
+void Order::setOrderer(const Orderer* orderer_in) {
+    orderer = orderer_in;
+}
+
+void Order::setStore(const Store* store_in) {
+    store = store_in;
 }
 
 // Order status management

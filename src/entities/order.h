@@ -16,6 +16,9 @@ enum OrderStatus {
     DELIVERY_COMPLETE     // 배달 완료
 };
 
+class Orderer;
+class Store;
+
 class Order {
     public:
         Order(int orderId, int ordererId, int storeId, const Location& deliveryLocation);
@@ -29,8 +32,12 @@ class Order {
         Location getDeliveryLocation() const;
         OrderStatus getStatus() const;
 
-        const Orderer& getOrderer() const;
-        const Store& getStore() const;
+        const Orderer* getOrderer() const;
+        const Store* getStore() const;
+
+        // Setters
+        void setOrderer(const Orderer* orderer);
+        void setStore(const Store* store);
 
         // Order status management
         void acceptOrder();                     // 주문 수락 (상태 변경)
@@ -49,8 +56,8 @@ class Order {
         Location deliveryLocation;
         OrderStatus status;
 
-        Orderer orderer;
-        Store store;
+        const Orderer* orderer;
+        const Store* store;
 };
 
 #endif
