@@ -21,10 +21,10 @@ void DeliverySystemWithDriverCall::acceptCall() {
 	Map& map = getMap();
 
     for (Driver& driver : drivers) {
-        if (!driver.isAvailable()) continue;                                                    // ��� ������ ��縸 ����
+        if (!driver.isAvailable()) continue;
         
         using OrderDist = pair<double, Order*>;
-        priority_queue<OrderDist, vector<OrderDist>, greater<OrderDist>> orderHeap;             // �ּ� �� (�Ÿ� ����)
+        priority_queue<OrderDist, vector<OrderDist>, greater<OrderDist>> orderHeap;
 
         for (Order* order : orders) {
             if (assignedOrderIds.count(order->getOrderId()) == 0 &&
@@ -40,6 +40,11 @@ void DeliverySystemWithDriverCall::acceptCall() {
                 const Location& driverLoc = driver.getCurrentLocation();
 
                 if (storeLoc.getNode() == -1 || ordererLoc.getNode() == -1 || driverLoc.getNode() == -1) {
+                    continue;
+                }
+                
+                if (storeLoc.getNode() >= (int)map.nodes.size() || ordererLoc.getNode() >= (int)map.nodes.size() || 
+                    driverLoc.getNode() >= (int)map.nodes.size()) {
                     continue;
                 }
 
@@ -60,7 +65,7 @@ void DeliverySystemWithDriverCall::acceptCall() {
                 bestOrder->assignDriver(driver.getId());
                 bestOrder->acceptOrder();
                 assignedOrderIds.insert(bestOrder->getOrderId());
-                break;                                                                                      // �� ���� �ϳ��� �Ҵ�
+                break;
             }
         }
     }
