@@ -46,7 +46,7 @@ Order* Store::processNextOrder() {
 }
 
 void Store::requestDriverCall(DeliverySystem* system) {
-    system -> requestCallsToDrivers();
+    system->acceptCall();
 }
 
 void Store::setPickupComplete(int orderId) {
