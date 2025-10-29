@@ -7,9 +7,9 @@
 
 using namespace std;
 
-DeliverySystemWithDriverCall::DeliverySystemWithDriverCall() : DeliverySystem() {}                  // ºÎ¸ð »ý¼ºÀÚ È£Ãâ
+DeliverySystemWithDriverCall::DeliverySystemWithDriverCall() : DeliverySystem() {}                  // ï¿½Î¸ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ È£ï¿½ï¿½
 
-DeliverySystemWithDriverCall::~DeliverySystemWithDriverCall() = default;                            // ºÎ¸ð ¼Ò¸êÀÚ È£Ãâ
+DeliverySystemWithDriverCall::~DeliverySystemWithDriverCall() = default;                            // ï¿½Î¸ï¿½ ï¿½Ò¸ï¿½ï¿½ï¿½ È£ï¿½ï¿½
 
 void DeliverySystemWithDriverCall::acceptCall() {
     set<int> assignedOrderIds;
@@ -21,32 +21,33 @@ void DeliverySystemWithDriverCall::acceptCall() {
 	Map& map = getMap();
 
     for (Driver& driver : drivers) {
-        if (!driver.isAvailable()) continue;                                                    // »ç¿ë °¡´ÉÇÑ ±â»ç¸¸ °í·Á
+        if (!driver.isAvailable()) continue;                                                    // ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ç¸¸ ï¿½ï¿½ï¿½ï¿½
         
         using OrderDist = pair<double, Order*>;
-        priority_queue<OrderDist, vector<OrderDist>, greater<OrderDist>> orderHeap;             // ÃÖ¼Ò Èü (°Å¸® ±âÁØ)
+        priority_queue<OrderDist, vector<OrderDist>, greater<OrderDist>> orderHeap;             // ï¿½Ö¼ï¿½ ï¿½ï¿½ (ï¿½Å¸ï¿½ ï¿½ï¿½ï¿½ï¿½)
 
         for (Order* order : orders) {
             if (assignedOrderIds.count(order->getOrderId()) == 0 &&
                 order->getStatus() == ORDER_ACCEPTED)
             {
-                auto storeIt = find_if(stores.begin(), stores.end(), [&](const Store& store) {              // °¡°Ô Ã£±â
-                    return store.getId() == order->getStoreId();
-                    });
-                if (storeIt == stores.end()) continue;
-                const Location& storeLoc = storeIt->getLocation();
+                const Store* orderStore = order->getStore();
+                const Orderer* orderOrderer = order->getOrderer();
+                
+                if (!orderStore || !orderOrderer) continue;
+                
+                const Location& storeLoc = orderStore->getLocation();
+                const Location& ordererLoc = orderOrderer->getLocation();
+                const Location& driverLoc = driver.getCurrentLocation();
 
-                auto ordererIt = find_if(orderers.begin(), orderers.end(), [&](const Orderer& orderer) {    // ÁÖ¹®ÀÚ Ã£±â
-                    return orderer.getId() == order->getOrdererId();
-                    });
-                if (ordererIt == orderers.end()) continue;
-                const Location& ordererLoc = ordererIt->getLocation();
+                if (storeLoc.getNode() == -1 || ordererLoc.getNode() == -1 || driverLoc.getNode() == -1) {
+                    continue;
+                }
 
-                double distToStore = map.GetMap_cost(driver.getCurrentLocation(), storeLoc);  // ±â»ç ¡æ °¡°Ô, °¡°Ô ¡æ ÁÖ¹®ÀÚ ÃÖ´Ü°Å¸® ÇÕ»ê
-                double distToOrderer = map.GetMap_cost(storeLoc, ordererLoc);
+                double distToStore = map.GetMap_cost(driverLoc.getNode(), storeLoc.getNode());
+                double distToOrderer = map.GetMap_cost(storeLoc.getNode(), ordererLoc.getNode());
                 double totalDist = distToStore + distToOrderer;
 
-                orderHeap.push({ totalDist, order });                                                       // °Å¸®¿Í ÁÖ¹® ½ÖÀ» Èü¿¡ Ãß°¡
+                orderHeap.push({ totalDist, order });
             }
         }
 
@@ -59,7 +60,7 @@ void DeliverySystemWithDriverCall::acceptCall() {
                 bestOrder->assignDriver(driver.getId());
                 bestOrder->acceptOrder();
                 assignedOrderIds.insert(bestOrder->getOrderId());
-                break;                                                                                      // ÇÑ ±â»ç´ç ÇÏ³ª¸¸ ÇÒ´ç
+                break;                                                                                      // ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ï³ï¿½ï¿½ï¿½ ï¿½Ò´ï¿½
             }
         }
     }
