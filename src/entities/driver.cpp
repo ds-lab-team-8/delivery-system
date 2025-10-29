@@ -38,6 +38,10 @@ void Driver::updateLocation(const Location& newLocation) {
     currentLocation = newLocation;
 }
 
+void Driver::setLocationNode(int node) {
+    currentLocation.node = node;
+}
+
 // Order management methods
 void Driver::addOrder(Order* order) {
     orderQueue.push(order);

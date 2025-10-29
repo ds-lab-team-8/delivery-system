@@ -24,6 +24,7 @@ class Driver {
 
         // Location management
         void updateLocation(const Location& newLocation);
+        void setLocationNode(int node);
 
         // Order management methods
         void addOrder(Order* order);
