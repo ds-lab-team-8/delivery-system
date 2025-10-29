@@ -1,4 +1,6 @@
 #include "simulator.h"
+#include "delivery_system_with_drivercall.h"
+#include "delivery_system_with_systemselection.h"
 #include <sstream>
 #include <iomanip>
 #include <fstream>
@@ -52,27 +54,68 @@ struct Event {
     }
 };
 
-Simulator::Simulator() : useRealImplementation(false), 
+Simulator::Simulator() : deliverySystem(nullptr), 
+                         systemType(MOCK),
                          nextOrdererId(1), nextDriverId(1), 
                          nextStoreId(1), nextOrderId(1) {}
 
 Simulator::~Simulator() {
-    // 동적 할당된 Order 객체들 삭제
+    if (deliverySystem) {
+        delete deliverySystem;
+    }
+    
     for (Order* order : orders) {
         delete order;
+    }
+}
+
+void Simulator::switchSystemType(SystemType newType) {
+    if (deliverySystem) {
+        delete deliverySystem;
+        deliverySystem = nullptr;
+    }
+    
+    systemType = newType;
+    
+    switch (systemType) {
+        case DRIVER_CALL:
+            deliverySystem = new DeliverySystemWithDriverCall();
+            cout << "[시스템 모드 변경] DriverCall 방식으로 변경되었습니다." << endl;
+            break;
+        case SYSTEM_SELECTION:
+            deliverySystem = new DeliverySystemWithSystemSelection();
+            cout << "[시스템 모드 변경] SystemSelection 방식으로 변경되었습니다." << endl;
+            break;
+        case MOCK:
+            deliverySystem = nullptr;
+            cout << "[시스템 모드 변경] Mock 모드로 변경되었습니다." << endl;
+            break;
+    }
+    
+    for (const Orderer& orderer : orderers) {
+        if (deliverySystem) deliverySystem->addOrderer(orderer);
+    }
+    for (const Driver& driver : drivers) {
+        if (deliverySystem) deliverySystem->addDriver(driver);
+    }
+    for (const Store& store : stores) {
+        if (deliverySystem) deliverySystem->addStore(store);
+    }
+    for (Order* order : orders) {
+        if (deliverySystem) deliverySystem->addOrder(*order);
     }
 }
 
 void Simulator::simulateWithUserInput() {
     printHeader();
 
-    // 현재 모드 출력
-    cout << "\n[실행 모드: " << (useRealImplementation ? "실제 구현 사용" : "시뮬레이터 독립 실행")
-         << "]" << endl;
-    if (!useRealImplementation) {
-        cout << "[참고] 현재는 Mock 모드로 실행됩니다." << endl;
-        cout << "       실제 DeliverySystem 구현이 완료되면 useRealImplementation을 true로 변경하세요." << endl;
+    string modeStr;
+    switch (systemType) {
+        case MOCK: modeStr = "Mock 모드"; break;
+        case DRIVER_CALL: modeStr = "DriverCall 방식"; break;
+        case SYSTEM_SELECTION: modeStr = "SystemSelection 방식"; break;
     }
+    cout << "\n[실행 모드: " << modeStr << "]" << endl;
 
     printHelp();
 
@@ -98,8 +141,8 @@ void Simulator::simulateWithUserInput() {
             Location loc(x, y);
             Orderer orderer(id, name, loc);
 
-            if (useRealImplementation) {
-                deliverySystem.addOrderer(orderer);
+            if (deliverySystem) {
+                deliverySystem->addOrderer(orderer);
             }
 
             orderers.push_back(orderer);
@@ -116,8 +159,8 @@ void Simulator::simulateWithUserInput() {
             Location loc(x, y);
             Driver driver(id, name, loc);
 
-            if (useRealImplementation) {
-                deliverySystem.addDriver(driver);
+            if (deliverySystem) {
+                deliverySystem->addDriver(driver);
             }
 
             drivers.push_back(driver);
@@ -134,8 +177,8 @@ void Simulator::simulateWithUserInput() {
             Location loc(x, y);
             Store store(id, name, loc);
 
-            if (useRealImplementation) {
-                deliverySystem.addStore(store);
+            if (deliverySystem) {
+                deliverySystem->addStore(store);
             }
 
             stores.push_back(store);
@@ -151,8 +194,22 @@ void Simulator::simulateWithUserInput() {
             Location deliveryLoc(x, y);
             Order* order = new Order(orderId, ordererId, storeId, deliveryLoc);
 
-            if (useRealImplementation) {
-                deliverySystem.addOrder(*order);
+            auto ordererIt = find_if(orderers.begin(), orderers.end(), [&](const Orderer& o) {
+                return o.getId() == ordererId;
+            });
+            if (ordererIt != orderers.end()) {
+                order->setOrderer(&(*ordererIt));
+            }
+
+            auto storeIt = find_if(stores.begin(), stores.end(), [&](const Store& s) {
+                return s.getId() == storeId;
+            });
+            if (storeIt != stores.end()) {
+                order->setStore(&(*storeIt));
+            }
+
+            if (deliverySystem) {
+                deliverySystem->addOrder(*order);
             }
 
             orders.push_back(order);
@@ -181,8 +238,8 @@ void Simulator::simulateWithUserInput() {
                 Location loc(x, y);
                 Orderer orderer(id, name, loc);
 
-                if (useRealImplementation) {
-                    deliverySystem.addOrderer(orderer);
+                if (deliverySystem) {
+                    deliverySystem->addOrderer(orderer);
                 }
 
                 orderers.push_back(orderer);
@@ -209,8 +266,8 @@ void Simulator::simulateWithUserInput() {
                 Location loc(x, y);
                 Driver driver(id, name, loc);
 
-                if (useRealImplementation) {
-                    deliverySystem.addDriver(driver);
+                if (deliverySystem) {
+                    deliverySystem->addDriver(driver);
                 }
 
                 drivers.push_back(driver);
@@ -237,8 +294,8 @@ void Simulator::simulateWithUserInput() {
                 Location loc(x, y);
                 Store store(id, name, loc);
 
-                if (useRealImplementation) {
-                    deliverySystem.addStore(store);
+                if (deliverySystem) {
+                    deliverySystem->addStore(store);
                 }
 
                 stores.push_back(store);
@@ -282,8 +339,22 @@ void Simulator::simulateWithUserInput() {
                 Location deliveryLoc(x, y);
                 Order* order = new Order(orderId, ordererId, storeId, deliveryLoc);
 
-                if (useRealImplementation) {
-                    deliverySystem.addOrder(*order);
+                auto ordererIt = find_if(orderers.begin(), orderers.end(), [&](const Orderer& o) {
+                    return o.getId() == ordererId;
+                });
+                if (ordererIt != orderers.end()) {
+                    order->setOrderer(&(*ordererIt));
+                }
+
+                auto storeIt = find_if(stores.begin(), stores.end(), [&](const Store& s) {
+                    return s.getId() == storeId;
+                });
+                if (storeIt != stores.end()) {
+                    order->setStore(&(*storeIt));
+                }
+
+                if (deliverySystem) {
+                    deliverySystem->addOrder(*order);
                 }
 
                 orders.push_back(order);
@@ -316,8 +387,8 @@ void Simulator::simulateWithUserInput() {
                 Location loc(x, y);
                 Orderer orderer(id, name, loc);
 
-                if (useRealImplementation) {
-                    deliverySystem.addOrderer(orderer);
+                if (deliverySystem) {
+                    deliverySystem->addOrderer(orderer);
                 }
 
                 orderers.push_back(orderer);
@@ -336,8 +407,8 @@ void Simulator::simulateWithUserInput() {
                 Location loc(x, y);
                 Driver driver(id, name, loc);
 
-                if (useRealImplementation) {
-                    deliverySystem.addDriver(driver);
+                if (deliverySystem) {
+                    deliverySystem->addDriver(driver);
                 }
 
                 drivers.push_back(driver);
@@ -356,8 +427,8 @@ void Simulator::simulateWithUserInput() {
                 Location loc(x, y);
                 Store store(id, name, loc);
 
-                if (useRealImplementation) {
-                    deliverySystem.addStore(store);
+                if (deliverySystem) {
+                    deliverySystem->addStore(store);
                 }
 
                 stores.push_back(store);
@@ -383,8 +454,22 @@ void Simulator::simulateWithUserInput() {
                 Location deliveryLoc(x, y);
                 Order* order = new Order(orderId, ordererId, storeId, deliveryLoc);
 
-                if (useRealImplementation) {
-                    deliverySystem.addOrder(*order);
+                auto ordererIt = find_if(orderers.begin(), orderers.end(), [&](const Orderer& o) {
+                    return o.getId() == ordererId;
+                });
+                if (ordererIt != orderers.end()) {
+                    order->setOrderer(&(*ordererIt));
+                }
+
+                auto storeIt = find_if(stores.begin(), stores.end(), [&](const Store& s) {
+                    return s.getId() == storeId;
+                });
+                if (storeIt != stores.end()) {
+                    order->setStore(&(*storeIt));
+                }
+
+                if (deliverySystem) {
+                    deliverySystem->addOrder(*order);
                 }
 
                 orders.push_back(order);
@@ -400,6 +485,20 @@ void Simulator::simulateWithUserInput() {
 
         } else if (cmd == "list") {
             listAll();
+
+        } else if (cmd == "switch_system") {
+            string systemTypeStr;
+            iss >> systemTypeStr;
+            
+            if (systemTypeStr == "mock") {
+                switchSystemType(MOCK);
+            } else if (systemTypeStr == "driver_call") {
+                switchSystemType(DRIVER_CALL);
+            } else if (systemTypeStr == "system_selection") {
+                switchSystemType(SYSTEM_SELECTION);
+            } else {
+                cout << "잘못된 시스템 타입입니다. (mock, driver_call, system_selection 중 하나를 입력하세요)" << endl;
+            }
 
         } else if (cmd == "start") {
             cout << "\n시뮬레이션을 시작합니다...\n" << endl;
@@ -469,22 +568,67 @@ void Simulator::runSimulation() {
     vector<Event> events;
     double currentTime = 0.0;
 
-    if (useRealImplementation) {
-        deliverySystem.requestCallsToDrivers();
+    if (systemType != MOCK) {
+        deliverySystem->acceptCall();
+        
+        for (Order* order : orders) {
+            if (order->getDriverId() != -1 && !orderAssigned[order->getOrderId()]) {
+                int driverId = order->getDriverId();
+                orderAssigned[order->getOrderId()] = true;
+                
+                const Store* orderStore = order->getStore();
+                if (!orderStore) continue;
+                
+                Location storeLocation = orderStore->getLocation();
+                Location driverLoc = driverLocations[driverId];
+                
+                double pickupDistance = driverLoc.calculateDistance(storeLocation);
+                double pickupTime = pickupDistance / SPEED;
+                double pickupCompleteTime = driverAvailableTime[driverId] + pickupTime;
+                
+                Location deliveryLocation = order->getDeliveryLocation();
+                double deliveryDistance = storeLocation.calculateDistance(deliveryLocation);
+                double deliveryTime = deliveryDistance / SPEED;
+                double deliveryCompleteTime = pickupCompleteTime + deliveryTime;
+                
+                events.push_back(Event(driverAvailableTime[driverId], EVENT_ORDER_ASSIGNED, 
+                                      order->getOrderId(), driverId, driverLocations[driverId]));
+                events.push_back(Event(pickupCompleteTime, EVENT_PICKUP_COMPLETE, 
+                                      order->getOrderId(), driverId, storeLocation, pickupDistance));
+                events.push_back(Event(deliveryCompleteTime, EVENT_DELIVERY_COMPLETE, 
+                                      order->getOrderId(), driverId, deliveryLocation, deliveryDistance));
+                
+                driverAvailableTime[driverId] = deliveryCompleteTime;
+                driverLocations[driverId] = deliveryLocation;
+                
+                OrderStats oStats;
+                oStats.orderId = order->getOrderId();
+                oStats.driverId = driverId;
+                oStats.pickupDistance = pickupDistance;
+                oStats.deliveryDistance = deliveryDistance;
+                oStats.totalTime = pickupTime + deliveryTime;
+                orderStats[order->getOrderId()] = oStats;
+                
+                driverStats[driverId].deliveryCount++;
+                driverStats[driverId].totalDistance += (pickupDistance + deliveryDistance);
+                driverStats[driverId].completedOrders.push_back(order->getOrderId());
+            }
+        }
+        
+        cout << "\n[시간: 0.0초] 배차 시스템을 통해 모든 주문이 배차되었습니다.\n" << endl;
     } else {
         for (Order* order : orders) {
             for (const Driver& driver : drivers) {
                 driverCallQueue[driver.getId()].push_back(order->getOrderId());
             }
         }
-    }
+        
+        cout << "\n[시간: 0.0초] 모든 주문이 기사들에게 배차 요청되었습니다.\n" << endl;
 
-    cout << "\n[시간: 0.0초] 모든 주문이 기사들에게 배차 요청되었습니다.\n" << endl;
-
-    bool allOrdersAssigned = false;
-    
-    while (!allOrdersAssigned) {
-        for (const Driver& driver : drivers) {
+        bool allOrdersAssigned = false;
+        
+        while (!allOrdersAssigned) {
+            for (const Driver& driver : drivers) {
             int driverId = driver.getId();
             
             if (driverAvailableTime[driverId] > currentTime) {
@@ -538,11 +682,6 @@ void Simulator::runSimulation() {
                 if (!assignedOrder) continue;
 
                 assignedOrder->assignDriver(driverId);
-                
-                if (useRealImplementation) {
-                    deliverySystem.acceptCall(bestOrderId);
-                }
-
                 orderAssigned[bestOrderId] = true;
 
                 Store* targetStore = storeMap[assignedOrder->getStoreId()];
@@ -604,23 +743,19 @@ void Simulator::runSimulation() {
             if (minNextAvailable > 0) {
                 currentTime = minNextAvailable;
                 
-                if (useRealImplementation) {
-                    deliverySystem.requestCallsToDrivers();
-                } else {
-                    for (Order* order : orders) {
-                        if (!orderAssigned[order->getOrderId()]) {
-                            for (const Driver& driver : drivers) {
-                                if (driverAvailableTime[driver.getId()] <= currentTime) {
-                                    bool alreadyInQueue = false;
-                                    for (int oid : driverCallQueue[driver.getId()]) {
-                                        if (oid == order->getOrderId()) {
-                                            alreadyInQueue = true;
-                                            break;
-                                        }
+                for (Order* order : orders) {
+                    if (!orderAssigned[order->getOrderId()]) {
+                        for (const Driver& driver : drivers) {
+                            if (driverAvailableTime[driver.getId()] <= currentTime) {
+                                bool alreadyInQueue = false;
+                                for (int oid : driverCallQueue[driver.getId()]) {
+                                    if (oid == order->getOrderId()) {
+                                        alreadyInQueue = true;
+                                        break;
                                     }
-                                    if (!alreadyInQueue) {
-                                        driverCallQueue[driver.getId()].push_back(order->getOrderId());
-                                    }
+                                }
+                                if (!alreadyInQueue) {
+                                    driverCallQueue[driver.getId()].push_back(order->getOrderId());
                                 }
                             }
                         }
@@ -629,6 +764,7 @@ void Simulator::runSimulation() {
             } else {
                 break;
             }
+        }
         }
     }
 
@@ -653,9 +789,6 @@ void Simulator::runSimulation() {
                 }
                 if (currentOrder) {
                     currentOrder->completePickup();
-                    if (useRealImplementation) {
-                        deliverySystem.completePickup(event.orderId);
-                    }
                     Store* store = storeMap[currentOrder->getStoreId()];
                     cout << "[시간: " << fixed << setprecision(1) << event.time
                          << "초] 기사 #" << event.driverId << "이(가) 매장 #" << store->getId()
@@ -673,9 +806,6 @@ void Simulator::runSimulation() {
                 }
                 if (currentOrder) {
                     currentOrder->completeDelivery();
-                    if (useRealImplementation) {
-                        deliverySystem.completeDelivery(event.orderId);
-                    }
                     cout << "[시간: " << fixed << setprecision(1) << event.time
                          << "초] 기사 #" << event.driverId << "이(가) 주문 #" << event.orderId
                          << " 배달 완료! (거리: " << fixed << setprecision(2) << event.distance << ")" << endl;
@@ -891,6 +1021,8 @@ void Simulator::printHelp() {
     cout << "    - 주문자, 기사, 매장, 주문을 한 번에 랜덤으로 추가합니다." << endl;
     cout << "  list" << endl;
     cout << "    - 모든 주문자, 기사, 매장, 주문을 조회합니다." << endl;
+    cout << "  switch_system <type>" << endl;
+    cout << "    - 배달 시스템 타입을 변경합니다. (mock, driver_call, system_selection)" << endl;
     cout << "  start" << endl;
     cout << "    - 시뮬레이션을 시작합니다." << endl;
     cout << "  help" << endl;
