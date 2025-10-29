@@ -35,17 +35,28 @@ void DeliverySystem::addOrder(const Order& order) {                             
         order.getDeliveryLocation()
     );                                                                          // 동적 할당된 주문 객체 생성
 
-    orders.push_back(newOrder);                                                 // 해당 주문을 받는 가게를 찾아서 주문 큐에 추가
-
-    auto it = find_if(stores.begin(), stores.end(), [&](const Store& store) {
+    auto storeIt = find_if(stores.begin(), stores.end(), [&](const Store& store) {
         return store.getId() == order.getStoreId();
-        });                                                                         // 해당 주문을 받는 가게 찾기
-    if (it != stores.end()) {
-        it->receiveOrder(newOrder);                                             // 가게의 주문 큐에 주문 추가
+        });
+    if (storeIt != stores.end()) {
+        newOrder->setStore(&(*storeIt));
+        storeIt->receiveOrder(newOrder);
     }
     else {
         cerr << "Error: Store with ID " << order.getStoreId() << " not found." << endl;
-    }                                                                           // 가게가 존재하지 않는 경우 에러 메시지 출력                                                                    
+    }
+
+    auto ordererIt = find_if(orderers.begin(), orderers.end(), [&](const Orderer& orderer) {
+        return orderer.getId() == order.getOrdererId();
+        });
+    if (ordererIt != orderers.end()) {
+        newOrder->setOrderer(&(*ordererIt));
+    }
+    else {
+        cerr << "Error: Orderer with ID " << order.getOrdererId() << " not found." << endl;
+    }
+
+    orders.push_back(newOrder);
 }
 /*
 void DeliverySystem::requestCallsToDrivers() {
