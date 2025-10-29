@@ -16,6 +16,9 @@ class Orderer {
         int getId() const;
         string getName() const;
         Location getLocation() const;
+        
+        // Location node 설정
+        void setLocationNode(int node);
 
     private:
         int id;

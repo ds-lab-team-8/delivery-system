@@ -23,3 +23,7 @@ string Orderer::getName() const {
 Location Orderer::getLocation() const {
     return location;
 }
+
+void Orderer::setLocationNode(int node) {
+    location.node = node;
+}
