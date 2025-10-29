@@ -16,6 +16,12 @@ using namespace std;
 struct DriverStats;
 struct OrderStats;
 
+enum SystemType {
+    MOCK,
+    DRIVER_CALL,
+    SYSTEM_SELECTION
+};
+
 class Simulator {
 public:
     Simulator();
@@ -24,7 +30,7 @@ public:
     void simulateWithUserInput();
 
 private:
-    DeliverySystem deliverySystem;
+    DeliverySystem* deliverySystem;
 
     // 시뮬레이션을 위한 데이터 저장
     vector<Orderer> orderers;
@@ -32,8 +38,7 @@ private:
     vector<Store> stores;
     vector<Order*> orders;
 
-    // 실제 DeliverySystem 구현 사용 여부 (false: Mock 모드, true: 실제 구현 사용)
-    bool useRealImplementation;
+    SystemType systemType;
 
     // ID 자동 증가 카운터
     int nextOrdererId;
@@ -43,6 +48,7 @@ private:
 
     // 시뮬레이션 메서드
     void runSimulation();
+    void switchSystemType(SystemType newType);
 
     // 출력 메서드
     void printSimulationResults(const map<int, DriverStats>& driverStats,
