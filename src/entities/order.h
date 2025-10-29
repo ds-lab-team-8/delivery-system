@@ -38,6 +38,7 @@ class Order {
         // Setters
         void setOrderer(const Orderer* orderer);
         void setStore(const Store* store);
+        void setDeliveryLocationNode(int node);
 
         // Order status management
         void acceptOrder();                     // 주문 수락 (상태 변경)

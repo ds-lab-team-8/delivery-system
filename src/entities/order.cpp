@@ -61,6 +61,10 @@ void Order::setStore(const Store* store_in) {
     store = store_in;
 }
 
+void Order::setDeliveryLocationNode(int node) {
+    deliveryLocation.node = node;
+}
+
 // Order status management
 void Order::acceptOrder() {
     status = ORDER_ACCEPTED;
