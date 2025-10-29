@@ -30,6 +30,10 @@ queue<Order*> Store::getOrderQueue() const {
     return orderQueue;
 }
 
+void Store::setLocationNode(int node) {
+    location.node = node;
+}
+
 // Order management
 void Store::receiveOrder(Order* order) {
     order -> acceptOrder(); // ORDER_ACCEPTED로 변경

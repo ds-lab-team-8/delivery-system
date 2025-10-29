@@ -21,6 +21,9 @@ class Store {
         string getName() const;
         Location getLocation() const;
         queue<Order*> getOrderQueue() const;
+        
+        // Location node 설정
+        void setLocationNode(int node);
 
         // Order management methods
         void receiveOrder(Order* order);
