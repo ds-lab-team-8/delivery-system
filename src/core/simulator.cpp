@@ -55,9 +55,12 @@ struct Event {
 };
 
 Simulator::Simulator() : deliverySystem(nullptr), 
-                         systemType(MOCK),
+                         systemType(DRIVER_CALL),
                          nextOrdererId(1), nextDriverId(1), 
-                         nextStoreId(1), nextOrderId(1) {}
+                         nextStoreId(1), nextOrderId(1) {
+    // 기본값으로 DRIVER_CALL 시스템 초기화
+    switchSystemType(DRIVER_CALL);
+}
 
 Simulator::~Simulator() {
     if (deliverySystem) {
@@ -496,21 +499,31 @@ void Simulator::simulateWithUserInput() {
             string systemTypeStr;
             iss >> systemTypeStr;
             
-            if (systemTypeStr == "mock") {
+            if (systemTypeStr.empty()) {
+                // 인자가 없으면 driver_call과 system_selection 사이에서 토글
+                if (systemType == DRIVER_CALL) {
+                    switchSystemType(SYSTEM_SELECTION);
+                } else if (systemType == SYSTEM_SELECTION) {
+                    switchSystemType(DRIVER_CALL);
+                } else {
+                    // mock이거나 초기 상태면 driver_call로 설정
+                    switchSystemType(DRIVER_CALL);
+                }
+            } else if (systemTypeStr == "mock") {
                 switchSystemType(MOCK);
             } else if (systemTypeStr == "driver_call") {
                 switchSystemType(DRIVER_CALL);
             } else if (systemTypeStr == "system_selection") {
                 switchSystemType(SYSTEM_SELECTION);
             } else {
-                cout << "잘못된 시스템 타입입니다. (mock, driver_call, system_selection 중 하나를 입력하세요)" << endl;
+                cout << "잘못된 시스템 타입입니다. (driver_call, system_selection 중 하나를 입력하세요)" << endl;
             }
 
         } else if (cmd == "start" || cmd == "s") {
             cout << "\n시뮬레이션을 시작합니다...\n" << endl;
             runSimulation();
 
-        } else if (cmd == "quit" || cmd == "exit") {
+        } else if (cmd == "quit" || cmd == "exit" || cmd == "q") {
             cout << "시뮬레이터를 종료합니다." << endl;
             running = false;
 
@@ -1028,13 +1041,14 @@ void Simulator::printHelp() {
     cout << "    - 주문자, 기사, 매장, 주문을 한 번에 랜덤으로 추가합니다." << endl;
     cout << "  list" << endl;
     cout << "    - 모든 주문자, 기사, 매장, 주문을 조회합니다." << endl;
-    cout << "  switch_system <type> (별칭: ss)" << endl;
-    cout << "    - 배달 시스템 타입을 변경합니다. (mock, driver_call, system_selection)" << endl;
+    cout << "  switch_system [type] (별칭: ss)" << endl;
+    cout << "    - 배달 시스템 타입을 변경합니다. (driver_call, system_selection)" << endl;
+    cout << "    - 인자 없이 실행하면 driver_call ↔ system_selection 토글" << endl;
     cout << "  start (별칭: s)" << endl;
     cout << "    - 시뮬레이션을 시작합니다." << endl;
     cout << "  help" << endl;
     cout << "    - 도움말을 출력합니다." << endl;
-    cout << "  quit / exit" << endl;
+    cout << "  quit / exit (별칭: q)" << endl;
     cout << "    - 시뮬레이터를 종료합니다." << endl;
     printSeparator();
 }
