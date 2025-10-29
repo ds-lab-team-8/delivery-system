@@ -3,10 +3,12 @@
 
 #include "delivery_system.h"
 
-class DeliverySystemWithSystemSelection : DeliverySystem {
+class DeliverySystemWithSystemSelection : public DeliverySystem {
 public:
     DeliverySystemWithSystemSelection();
     ~DeliverySystemWithSystemSelection();
+    
+    void acceptCall() override;
 };
 
 #endif

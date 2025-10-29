@@ -7,6 +7,10 @@
 
 using namespace std;
 
+DeliverySystemWithSystemSelection::DeliverySystemWithSystemSelection() : DeliverySystem() {}
+
+DeliverySystemWithSystemSelection::~DeliverySystemWithSystemSelection() = default;
+
 class DistanceAndNode {
 public:
     DistanceAndNode(double dis, int d, int o) {
@@ -26,7 +30,11 @@ bool sort_dis(DistanceAndNode* a, DistanceAndNode* b) {
     return a->distance < b->distance;
 }
 
-void DeliverySystemWithSystemSelection::Selection() {
+void DeliverySystemWithSystemSelection::acceptCall() {
+    vector<Driver>& drivers = getDrivers();
+    vector<Order*>& orders = getOrders();
+    Map& map = getMap();
+    
     double** distance_arr;
     vector<vector<DistanceAndNode*>> vector_arr;
 
@@ -39,11 +47,23 @@ void DeliverySystemWithSystemSelection::Selection() {
         double min = INT_MAX;
 
         for (int j = 0;j < orders.size();j++) {
+            const Store* orderStore = orders[j]->getStore();
+            const Orderer* orderOrderer = orders[j]->getOrderer();
+            
+            if (!orderStore || !orderOrderer) continue;
+            
+            const Location& storeLoc = orderStore->getLocation();
+            const Location& ordererLoc = orderOrderer->getLocation();
+            const Location& driverLoc = drivers[i].getCurrentLocation();
+            
+            if (storeLoc.node == -1 || ordererLoc.node == -1 || driverLoc.node == -1) {
+                distance_arr[i][j] = INT_MAX;
+                continue;
+            }
 
-            //i번째기사가 음식점을 거쳐서 j번째 주문자에게 도달하기위한 최단거리
             distance_arr[i][j] =
-                map.map_cost[orders[j]->store.getLocation().node][drivers[i].getCurrentLocation().node]
-                + map.map_cost[orders[j]->orderer.getLocation().node][orders[j]->store.getLocation().node];
+                map.map_cost[storeLoc.node][driverLoc.node]
+                + map.map_cost[ordererLoc.node][storeLoc.node];
 
             if (distance_arr[i][j] < min) min = distance_arr[i][j];
         }
