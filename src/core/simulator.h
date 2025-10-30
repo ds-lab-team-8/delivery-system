@@ -54,7 +54,8 @@ private:
     void printSimulationResults(const map<int, DriverStats>& driverStats,
                                 const map<int, OrderStats>& orderStats,
                                 double totalTime,
-                                const vector<string>& eventLogs);
+                                const vector<string>& eventLogs,
+                                const map<int, string>& driverNames);
     void saveResultsToFile(const map<int, DriverStats>& driverStats,
                           const map<int, OrderStats>& orderStats,
                           double totalTime,

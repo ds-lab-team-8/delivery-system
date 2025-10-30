@@ -73,10 +73,7 @@ Simulator::~Simulator() {
 }
 
 void Simulator::switchSystemType(SystemType newType) {
-    // 기존 deliverySystem의 주문들을 백업
-    vector<Order*> existingOrders;
     if (deliverySystem) {
-        existingOrders = deliverySystem->getAllOrders();
         delete deliverySystem;
         deliverySystem = nullptr;
     }
@@ -97,26 +94,6 @@ void Simulator::switchSystemType(SystemType newType) {
             cout << "[시스템 모드 변경] Mock 모드로 변경되었습니다." << endl;
             break;
     }
-    
-    if (!deliverySystem) return;
-    
-    for (const Orderer& orderer : orderers) {
-        deliverySystem->addOrderer(orderer);
-    }
-    for (const Driver& driver : drivers) {
-        deliverySystem->addDriver(driver);
-    }
-    for (const Store& store : stores) {
-        deliverySystem->addStore(store);
-    }
-    
-    // 백업된 주문들을 새로운 deliverySystem에 추가
-    for (Order* order : existingOrders) {
-        deliverySystem->addOrder(*order);
-    }
-    
-    deliverySystem->initializeMap();
-    cout << "[시스템] Map 초기화 완료" << endl;
 }
 
 void Simulator::simulateWithUserInput() {
@@ -560,6 +537,47 @@ void Simulator::runSimulation() {
     cout << "시뮬레이션 진행" << endl;
     printSeparator();
 
+    vector<Orderer> orderersCopy;
+    vector<Driver> driversCopy;
+    vector<Store> storesCopy;
+    vector<Order*> ordersCopy;
+
+    for (const Orderer& orderer : orderers) {
+        orderersCopy.push_back(Orderer(orderer.getId(), orderer.getName(), orderer.getLocation()));
+    }
+
+    for (const Driver& driver : drivers) {
+        driversCopy.push_back(Driver(driver.getId(), driver.getName(), driver.getCurrentLocation()));
+    }
+
+    for (const Store& store : stores) {
+        storesCopy.push_back(Store(store.getId(), store.getName(), store.getLocation()));
+    }
+
+    for (Order* order : orders) {
+        Order* newOrder = new Order(order->getOrderId(), order->getOrdererId(), 
+                                   order->getStoreId(), order->getDeliveryLocation());
+        ordersCopy.push_back(newOrder);
+    }
+
+    if (systemType != MOCK && deliverySystem) {
+        for (const Orderer& orderer : orderersCopy) {
+            deliverySystem->addOrderer(orderer);
+        }
+        for (const Driver& driver : driversCopy) {
+            deliverySystem->addDriver(driver);
+        }
+        for (const Store& store : storesCopy) {
+            deliverySystem->addStore(store);
+        }
+        for (Order* order : ordersCopy) {
+            deliverySystem->addOrder(*order);
+        }
+
+        deliverySystem->initializeMap();
+        cout << "[시스템] 엔티티 복사 및 Map 초기화 완료" << endl;
+    }
+
     const double SPEED = 1.0;
 
     map<int, DriverStats> driverStats;
@@ -572,7 +590,7 @@ void Simulator::runSimulation() {
     map<int, vector<int>> driverCallQueue;
     map<int, bool> orderAssigned;
 
-    for (const Driver& driver : drivers) {
+    for (const Driver& driver : driversCopy) {
         driverStats[driver.getId()] = DriverStats();
         driverLocations[driver.getId()] = driver.getCurrentLocation();
         driverAvailableTime[driver.getId()] = 0.0;
@@ -580,11 +598,11 @@ void Simulator::runSimulation() {
         driverCallQueue[driver.getId()] = vector<int>();
     }
 
-    for (Store& store : stores) {
+    for (Store& store : storesCopy) {
         storeMap[store.getId()] = &store;
     }
 
-    for (Order* order : orders) {
+    for (Order* order : ordersCopy) {
         orderAssigned[order->getOrderId()] = false;
     }
 
@@ -594,11 +612,8 @@ void Simulator::runSimulation() {
 
     if (systemType != MOCK) {
         if (deliverySystem) {
-            deliverySystem->initializeMap();
-            cout << "[시스템] Map 초기화 완료" << endl;
+            deliverySystem->acceptCall();
         }
-        
-        deliverySystem->acceptCall();
         
         vector<Order*>& systemOrders = deliverySystem->getAllOrders();
         
@@ -649,8 +664,8 @@ void Simulator::runSimulation() {
         cout << "\n" << dispatchMsg << "\n" << endl;
         eventLogs.push_back(dispatchMsg);
     } else {
-        for (Order* order : orders) {
-            for (const Driver& driver : drivers) {
+        for (Order* order : ordersCopy) {
+            for (const Driver& driver : driversCopy) {
                 driverCallQueue[driver.getId()].push_back(order->getOrderId());
         }
     }
@@ -662,7 +677,7 @@ void Simulator::runSimulation() {
     bool allOrdersAssigned = false;
     
     while (!allOrdersAssigned) {
-        for (const Driver& driver : drivers) {
+        for (const Driver& driver : driversCopy) {
             int driverId = driver.getId();
             
             if (driverAvailableTime[driverId] > currentTime) {
@@ -681,7 +696,7 @@ void Simulator::runSimulation() {
                 if (orderAssigned[orderId]) continue;
 
                 Order* order = nullptr;
-                for (Order* o : orders) {
+                for (Order* o : ordersCopy) {
                     if (o->getOrderId() == orderId) {
                         order = o;
                         break;
@@ -706,7 +721,7 @@ void Simulator::runSimulation() {
 
             try {
                 Order* assignedOrder = nullptr;
-                for (Order* o : orders) {
+                for (Order* o : ordersCopy) {
                     if (o->getOrderId() == bestOrderId) {
                         assignedOrder = o;
                         break;
@@ -777,9 +792,9 @@ void Simulator::runSimulation() {
             if (minNextAvailable > 0) {
                 currentTime = minNextAvailable;
                 
-                    for (Order* order : orders) {
+                    for (Order* order : ordersCopy) {
                         if (!orderAssigned[order->getOrderId()]) {
-                            for (const Driver& driver : drivers) {
+                            for (const Driver& driver : driversCopy) {
                                 if (driverAvailableTime[driver.getId()] <= currentTime) {
                                     bool alreadyInQueue = false;
                                     for (int oid : driverCallQueue[driver.getId()]) {
@@ -818,7 +833,7 @@ void Simulator::runSimulation() {
                 break;
 
             case EVENT_PICKUP_COMPLETE:
-                for (Order* o : orders) {
+                for (Order* o : ordersCopy) {
                     if (o->getOrderId() == event.orderId) {
                         currentOrder = o;
                         break;
@@ -837,7 +852,7 @@ void Simulator::runSimulation() {
                 break;
 
             case EVENT_DELIVERY_COMPLETE:
-                for (Order* o : orders) {
+                for (Order* o : ordersCopy) {
                     if (o->getOrderId() == event.orderId) {
                         currentOrder = o;
                         break;
@@ -858,13 +873,18 @@ void Simulator::runSimulation() {
     double totalTime = events.empty() ? 0.0 : events.back().time;
     cout << "\n모든 주문이 처리되었습니다!\n" << endl;
 
-    printSimulationResults(driverStats, orderStats, totalTime, eventLogs);
+    printSimulationResults(driverStats, orderStats, totalTime, eventLogs, driverNames);
+    
+    for (Order* order : ordersCopy) {
+        delete order;
+    }
 }
 
 void Simulator::printSimulationResults(const map<int, DriverStats>& driverStats,
                                        const map<int, OrderStats>& orderStats,
                                        double totalTime,
-                                       const vector<string>& eventLogs) {
+                                       const vector<string>& eventLogs,
+                                       const map<int, string>& driverNames) {
     printSeparator();
     cout << "시뮬레이션 결과" << endl;
     printSeparator();
@@ -886,13 +906,10 @@ void Simulator::printSimulationResults(const map<int, DriverStats>& driverStats,
             int driverId = pair.first;
             const DriverStats& stats = pair.second;
 
-            // 기사 이름 찾기
             string driverName;
-            for (const Driver& driver : drivers) {
-                if (driver.getId() == driverId) {
-                    driverName = driver.getName();
-                    break;
-                }
+            auto nameIt = driverNames.find(driverId);
+            if (nameIt != driverNames.end()) {
+                driverName = nameIt->second;
             }
 
             cout << "기사 #" << driverId << " (" << driverName << ")" << endl;
@@ -926,7 +943,6 @@ void Simulator::printSimulationResults(const map<int, DriverStats>& driverStats,
         cout << "시뮬레이션 데이터가 없습니다." << endl;
     }
 
-    // 결과 파일 저장
     saveResultsToFile(driverStats, orderStats, totalTime, eventLogs);
     printSeparator();
 }
