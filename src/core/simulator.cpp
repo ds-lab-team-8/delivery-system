@@ -963,6 +963,15 @@ void Simulator::saveResultsToFile(const map<int, DriverStats>& driverStats,
     outFile << "    배달 시스템 시뮬레이션 결과\n";
     outFile << "====================================\n\n";
 
+    // 사용된 시스템 타입 출력
+    string systemTypeStr;
+    switch (systemType) {
+        case MOCK: systemTypeStr = "Mock 모드"; break;
+        case DRIVER_CALL: systemTypeStr = "DriverCall 방식"; break;
+        case SYSTEM_SELECTION: systemTypeStr = "SystemSelection 방식"; break;
+    }
+    outFile << "사용된 시스템: " << systemTypeStr << "\n\n";
+
     // 이벤트 로그 출력
     if (!eventLogs.empty()) {
         outFile << "시뮬레이션 진행 로그:\n";
