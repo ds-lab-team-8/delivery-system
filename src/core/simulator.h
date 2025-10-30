@@ -53,10 +53,12 @@ private:
     // 출력 메서드
     void printSimulationResults(const map<int, DriverStats>& driverStats,
                                 const map<int, OrderStats>& orderStats,
-                                double totalTime);
+                                double totalTime,
+                                const vector<string>& eventLogs);
     void saveResultsToFile(const map<int, DriverStats>& driverStats,
                           const map<int, OrderStats>& orderStats,
-                          double totalTime);
+                          double totalTime,
+                          const vector<string>& eventLogs);
 
     // UI 헬퍼 메서드
     void printHeader();

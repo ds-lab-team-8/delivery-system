@@ -589,6 +589,7 @@ void Simulator::runSimulation() {
     }
 
     vector<Event> events;
+    vector<string> eventLogs;  // 이벤트 로그를 저장할 벡터
     double currentTime = 0.0;
 
     if (systemType != MOCK) {
@@ -644,7 +645,9 @@ void Simulator::runSimulation() {
             }
         }
         
-        cout << "\n[시간: 0.0초] 배차 시스템을 통해 모든 주문이 배차되었습니다.\n" << endl;
+        string dispatchMsg = "[시간: 0.0초] 배차 시스템을 통해 모든 주문이 배차되었습니다.";
+        cout << "\n" << dispatchMsg << "\n" << endl;
+        eventLogs.push_back(dispatchMsg);
     } else {
         for (Order* order : orders) {
             for (const Driver& driver : drivers) {
@@ -652,7 +655,9 @@ void Simulator::runSimulation() {
         }
     }
 
-    cout << "\n[시간: 0.0초] 모든 주문이 기사들에게 배차 요청되었습니다.\n" << endl;
+    string mockDispatchMsg = "[시간: 0.0초] 모든 주문이 기사들에게 배차 요청되었습니다.";
+    cout << "\n" << mockDispatchMsg << "\n" << endl;
+    eventLogs.push_back(mockDispatchMsg);
 
     bool allOrdersAssigned = false;
     
@@ -801,12 +806,15 @@ void Simulator::runSimulation() {
 
     for (const Event& event : events) {
         Order* currentOrder = nullptr;
+        ostringstream logStream;
         
         switch (event.type) {
             case EVENT_ORDER_ASSIGNED:
-                cout << "[시간: " << fixed << setprecision(1) << event.time
-                     << "초] 기사 #" << event.driverId << " (" << driverNames[event.driverId]
-                     << ")이(가) 주문 #" << event.orderId << "을(를) 수락했습니다." << endl;
+                logStream << "[시간: " << fixed << setprecision(1) << event.time
+                          << "초] 기사 #" << event.driverId << " (" << driverNames[event.driverId]
+                          << ")이(가) 주문 #" << event.orderId << "을(를) 수락했습니다.";
+                cout << logStream.str() << endl;
+                eventLogs.push_back(logStream.str());
                 break;
 
             case EVENT_PICKUP_COMPLETE:
@@ -819,10 +827,12 @@ void Simulator::runSimulation() {
                 if (currentOrder) {
                     currentOrder->completePickup();
                     Store* store = storeMap[currentOrder->getStoreId()];
-                    cout << "[시간: " << fixed << setprecision(1) << event.time
-                         << "초] 기사 #" << event.driverId << "이(가) 매장 #" << store->getId()
-                         << " (" << store->getName() << ")에서 주문 #" << event.orderId
-                         << " 픽업 완료 (거리: " << fixed << setprecision(2) << event.distance << ")" << endl;
+                    logStream << "[시간: " << fixed << setprecision(1) << event.time
+                              << "초] 기사 #" << event.driverId << "이(가) 매장 #" << store->getId()
+                              << " (" << store->getName() << ")에서 주문 #" << event.orderId
+                              << " 픽업 완료 (거리: " << fixed << setprecision(2) << event.distance << ")";
+                    cout << logStream.str() << endl;
+                    eventLogs.push_back(logStream.str());
                 }
                 break;
 
@@ -835,9 +845,11 @@ void Simulator::runSimulation() {
                 }
                 if (currentOrder) {
                     currentOrder->completeDelivery();
-                    cout << "[시간: " << fixed << setprecision(1) << event.time
-                         << "초] 기사 #" << event.driverId << "이(가) 주문 #" << event.orderId
-                         << " 배달 완료! (거리: " << fixed << setprecision(2) << event.distance << ")" << endl;
+                    logStream << "[시간: " << fixed << setprecision(1) << event.time
+                              << "초] 기사 #" << event.driverId << "이(가) 주문 #" << event.orderId
+                              << " 배달 완료! (거리: " << fixed << setprecision(2) << event.distance << ")";
+                    cout << logStream.str() << endl;
+                    eventLogs.push_back(logStream.str());
                 }
                 break;
         }
@@ -846,12 +858,13 @@ void Simulator::runSimulation() {
     double totalTime = events.empty() ? 0.0 : events.back().time;
     cout << "\n모든 주문이 처리되었습니다!\n" << endl;
 
-    printSimulationResults(driverStats, orderStats, totalTime);
+    printSimulationResults(driverStats, orderStats, totalTime, eventLogs);
 }
 
 void Simulator::printSimulationResults(const map<int, DriverStats>& driverStats,
                                        const map<int, OrderStats>& orderStats,
-                                       double totalTime) {
+                                       double totalTime,
+                                       const vector<string>& eventLogs) {
     printSeparator();
     cout << "시뮬레이션 결과" << endl;
     printSeparator();
@@ -914,13 +927,14 @@ void Simulator::printSimulationResults(const map<int, DriverStats>& driverStats,
     }
 
     // 결과 파일 저장
-    saveResultsToFile(driverStats, orderStats, totalTime);
+    saveResultsToFile(driverStats, orderStats, totalTime, eventLogs);
     printSeparator();
 }
 
 void Simulator::saveResultsToFile(const map<int, DriverStats>& driverStats,
                                   const map<int, OrderStats>& orderStats,
-                                  double totalTime) {
+                                  double totalTime,
+                                  const vector<string>& eventLogs) {
     // out 디렉토리 생성
     mkdir("out", 0755);
     
@@ -948,6 +962,16 @@ void Simulator::saveResultsToFile(const map<int, DriverStats>& driverStats,
     outFile << "====================================\n";
     outFile << "    배달 시스템 시뮬레이션 결과\n";
     outFile << "====================================\n\n";
+
+    // 이벤트 로그 출력
+    if (!eventLogs.empty()) {
+        outFile << "시뮬레이션 진행 로그:\n";
+        outFile << "------------------------------------\n";
+        for (const string& log : eventLogs) {
+            outFile << log << "\n";
+        }
+        outFile << "\n";
+    }
 
     // 기본 통계
     outFile << "총 주문 수: " << orderStats.size() << "건\n";
