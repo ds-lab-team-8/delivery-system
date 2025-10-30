@@ -20,6 +20,10 @@ void DeliverySystemWithDriverCall::acceptCall() {
 	vector<Orderer>& orderers = getOrderers();
 	Map& map = getMap();
 
+    if (map.map_cost == nullptr) {
+        return;
+    }
+
     for (Driver& driver : drivers) {
         if (!driver.isAvailable()) continue;
         

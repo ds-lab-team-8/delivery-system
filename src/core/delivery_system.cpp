@@ -6,10 +6,9 @@ using namespace std;
 
 DeliverySystem::DeliverySystem() : map(100, 100) {}                                 // 기본 맵 크기를 100x100으로 설정
 
-DeliverySystem::~DeliverySystem() {                                                 // 소멸자에서 동적 할당된 주문 객체들 해제                                           
-    for (Order* order : orders) {
-        delete order;
-    }
+DeliverySystem::~DeliverySystem() {                                                 
+    // Order 객체들은 Simulator에서 관리하므로 여기서 삭제하지 않음
+    // orders 벡터는 포인터만 저장하고 있으므로 자동으로 정리됨
 }
 
 void DeliverySystem::addOrderer(const Orderer& orderer) {
@@ -37,23 +36,19 @@ void DeliverySystem::addDriver(const Driver& driver) {
 }
 
 void DeliverySystem::addOrder(const Order& order) {
-    Order* newOrder = new Order(
-        order.getOrderId(),
-        order.getOrdererId(),
-        order.getStoreId(),
-        order.getDeliveryLocation()
-    );
+    // 기존 Order 객체의 포인터를 찾아서 사용 (새로 생성하지 않음)
+    Order* orderPtr = const_cast<Order*>(&order);
     
-    Location deliveryLoc = newOrder->getDeliveryLocation();
+    Location deliveryLoc = orderPtr->getDeliveryLocation();
     map.addLocation(deliveryLoc);
-    newOrder->setDeliveryLocationNode(deliveryLoc.node);
+    orderPtr->setDeliveryLocationNode(deliveryLoc.node);
 
     auto storeIt = find_if(stores.begin(), stores.end(), [&](const Store& store) {
         return store.getId() == order.getStoreId();
         });
     if (storeIt != stores.end()) {
-        newOrder->setStore(&(*storeIt));
-        storeIt->receiveOrder(newOrder);
+        orderPtr->setStore(&(*storeIt));
+        storeIt->receiveOrder(orderPtr);
     }
     else {
         cerr << "Error: Store with ID " << order.getStoreId() << " not found." << endl;
@@ -63,13 +58,13 @@ void DeliverySystem::addOrder(const Order& order) {
         return orderer.getId() == order.getOrdererId();
         });
     if (ordererIt != orderers.end()) {
-        newOrder->setOrderer(&(*ordererIt));
+        orderPtr->setOrderer(&(*ordererIt));
     }
     else {
         cerr << "Error: Orderer with ID " << order.getOrdererId() << " not found." << endl;
     }
 
-    orders.push_back(newOrder);
+    orders.push_back(orderPtr);
 }
 /*
 void DeliverySystem::requestCallsToDrivers() {
@@ -127,7 +122,9 @@ void DeliverySystem::completeDelivery(int orderId) {                            
 void DeliverySystem::initializeMap() {
     int nodeCount = map.nodes.size();
     
-    if (nodeCount == 0) return;
+    if (nodeCount == 0) {
+        return;
+    }
     
     int** arr = new int*[nodeCount];
     for (int i = 0; i < nodeCount; i++) {

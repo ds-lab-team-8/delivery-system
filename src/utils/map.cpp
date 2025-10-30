@@ -24,17 +24,22 @@ void MapItem::setLocation(const Location& newLocation) {                // ��
     location = newLocation;
 }
 
-Map::Map(int width, int height) : width(width), height(height) {}       // �� �ʱ�ȭ �۾� (��: �׷��� �ʱ�ȭ ��)
+Map::Map(int width, int height) : width(width), height(height), map_pos(nullptr), map_cost(nullptr) {}       // �� �ʱ�ȭ �۾� (��: �׷��� �ʱ�ȭ ��)
 
 Map::~Map() {                                                          // 맵 소멸자
-    for (int i = 0;i < nodes.size();i++) {
-        delete[] map_pos[i];
-        delete[] map_cost[i];
+    if (map_pos != nullptr) {
+        for (int i = 0; i < (int)nodes.size(); i++) {
+            delete[] map_pos[i];
+        }
+        delete[] map_pos;
     }
-
-    delete[] map_pos;
-    delete[] map_cost;
-
+    
+    if (map_cost != nullptr) {
+        for (int i = 0; i < (int)nodes.size(); i++) {
+            delete[] map_cost[i];
+        }
+        delete[] map_cost;
+    }
 }
 
 void Map::addItem(const MapItem& item) {                                // �� ������ �߰�

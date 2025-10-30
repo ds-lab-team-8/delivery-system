@@ -73,7 +73,10 @@ Simulator::~Simulator() {
 }
 
 void Simulator::switchSystemType(SystemType newType) {
+    // 기존 deliverySystem의 주문들을 백업
+    vector<Order*> existingOrders;
     if (deliverySystem) {
+        existingOrders = deliverySystem->getAllOrders();
         delete deliverySystem;
         deliverySystem = nullptr;
     }
@@ -107,7 +110,8 @@ void Simulator::switchSystemType(SystemType newType) {
         deliverySystem->addStore(store);
     }
     
-    for (Order* order : orders) {
+    // 백업된 주문들을 새로운 deliverySystem에 추가
+    for (Order* order : existingOrders) {
         deliverySystem->addOrder(*order);
     }
     
@@ -588,6 +592,11 @@ void Simulator::runSimulation() {
     double currentTime = 0.0;
 
     if (systemType != MOCK) {
+        if (deliverySystem) {
+            deliverySystem->initializeMap();
+            cout << "[시스템] Map 초기화 완료" << endl;
+        }
+        
         deliverySystem->acceptCall();
         
         vector<Order*>& systemOrders = deliverySystem->getAllOrders();
@@ -640,15 +649,15 @@ void Simulator::runSimulation() {
         for (Order* order : orders) {
             for (const Driver& driver : drivers) {
                 driverCallQueue[driver.getId()].push_back(order->getOrderId());
-            }
         }
-        
-        cout << "\n[시간: 0.0초] 모든 주문이 기사들에게 배차 요청되었습니다.\n" << endl;
+    }
 
-        bool allOrdersAssigned = false;
-        
-        while (!allOrdersAssigned) {
-            for (const Driver& driver : drivers) {
+    cout << "\n[시간: 0.0초] 모든 주문이 기사들에게 배차 요청되었습니다.\n" << endl;
+
+    bool allOrdersAssigned = false;
+    
+    while (!allOrdersAssigned) {
+        for (const Driver& driver : drivers) {
             int driverId = driver.getId();
             
             if (driverAvailableTime[driverId] > currentTime) {
@@ -763,19 +772,19 @@ void Simulator::runSimulation() {
             if (minNextAvailable > 0) {
                 currentTime = minNextAvailable;
                 
-                for (Order* order : orders) {
-                    if (!orderAssigned[order->getOrderId()]) {
-                        for (const Driver& driver : drivers) {
-                            if (driverAvailableTime[driver.getId()] <= currentTime) {
-                                bool alreadyInQueue = false;
-                                for (int oid : driverCallQueue[driver.getId()]) {
-                                    if (oid == order->getOrderId()) {
-                                        alreadyInQueue = true;
-                                        break;
+                    for (Order* order : orders) {
+                        if (!orderAssigned[order->getOrderId()]) {
+                            for (const Driver& driver : drivers) {
+                                if (driverAvailableTime[driver.getId()] <= currentTime) {
+                                    bool alreadyInQueue = false;
+                                    for (int oid : driverCallQueue[driver.getId()]) {
+                                        if (oid == order->getOrderId()) {
+                                            alreadyInQueue = true;
+                                            break;
+                                        }
                                     }
-                                }
-                                if (!alreadyInQueue) {
-                                    driverCallQueue[driver.getId()].push_back(order->getOrderId());
+                                    if (!alreadyInQueue) {
+                                        driverCallQueue[driver.getId()].push_back(order->getOrderId());
                                 }
                             }
                         }
@@ -784,7 +793,7 @@ void Simulator::runSimulation() {
             } else {
                 break;
             }
-        }
+            }
         }
     }
 
