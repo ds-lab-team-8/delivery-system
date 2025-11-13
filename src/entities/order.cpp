@@ -10,6 +10,7 @@ Order::Order(int orderId_in, int ordererId_in, int storeId_in, const Location& d
     deliveryLocation(deliveryLocation_in),
     driverId(-1), // 기사 배정 전 -> -1로 초기화
     status(ORDER_REQUESTED),
+    deliveryFee(0.0),
     orderer(nullptr),
     store(nullptr) {
 }
@@ -44,12 +45,20 @@ OrderStatus Order::getStatus() const {
     return status;
 }
 
+double Order::getDeliveryFee() const {
+    return deliveryFee;
+}
+
 const Orderer* Order::getOrderer() const {
     return orderer;
 }
 
 const Store* Order::getStore() const {
     return store;
+}
+
+void Order::setDeliveryFee(double fee) {
+    deliveryFee = fee;
 }
 
 // Setters
