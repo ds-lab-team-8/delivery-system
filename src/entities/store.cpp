@@ -3,8 +3,8 @@
 #include "../core/delivery_system.h"
 
 // Constructor
-Store::Store(int id_in, const string& name_in, const Location& location_in) 
-    :id(id_in), name(name_in), location(location_in) {
+Store::Store(int id_in, const string& name_in, const Location& location_in, double feePerDistance_in) 
+    :id(id_in), name(name_in), location(location_in), feePerDistance(feePerDistance_in) {
 
 }
 
@@ -34,6 +34,10 @@ void Store::setLocationNode(int node) {
     location.node = node;
 }
 
+double Store::getFeePerDistance() const {
+    return feePerDistance;
+}
+
 // Order management
 void Store::receiveOrder(Order* order) {
     order -> acceptOrder(); // ORDER_ACCEPTED로 변경
@@ -59,4 +63,8 @@ void Store::setPickupComplete(int orderId) {
 
 void Store::displayOrderQueue() const {
     
+}
+
+bool Store::hasOrdersWaiting() const {
+    return !orderQueue.empty();
 }
