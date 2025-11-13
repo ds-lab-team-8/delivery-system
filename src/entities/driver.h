@@ -21,6 +21,7 @@ class Driver {
         string getName() const;
         Location getCurrentLocation() const;
         bool isAvailable() const;
+        double getTotalEarnings() const;
 
         // Location management
         void updateLocation(const Location& newLocation);
@@ -30,6 +31,7 @@ class Driver {
         void addOrder(Order* order);
         void acceptOrder(int orderId, DeliverySystem* system);
         void completeDelivery(int orderId);
+        void addEarnings(double amount);
 
     private:
         int id;
@@ -37,6 +39,7 @@ class Driver {
         Location currentLocation;
         queue<Order*> orderQueue;
         bool available;
+        double totalEarnings;
 };
 
 #endif
