@@ -13,7 +13,7 @@ class DeliverySystem;
 
 class Store {
     public:
-        Store(int id, const string& name, const Location& location);
+    Store(int id, const string& name, const Location& location, double feePerDistance);
         ~Store();
 
         // Getters
@@ -32,12 +32,14 @@ class Store {
         void setPickupComplete(int orderId);
         bool hasOrdersWaiting() const;
         void displayOrderQueue() const;
+        double getFeePerDistance() const;
 
     private:
         int id;
         string name;
         Location location;
         queue<Order*> orderQueue;
+        double feePerDistance;
 };
 
 #endif
