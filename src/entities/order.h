@@ -31,6 +31,7 @@ class Order {
         int getDriverId() const;
         Location getDeliveryLocation() const;
         OrderStatus getStatus() const;
+    double getDeliveryFee() const;
 
         const Orderer* getOrderer() const;
         const Store* getStore() const;
@@ -39,6 +40,7 @@ class Order {
         void setOrderer(const Orderer* orderer);
         void setStore(const Store* store);
         void setDeliveryLocationNode(int node);
+        void setDeliveryFee(double fee);
 
         // Order status management
         void acceptOrder();                     // 주문 수락 (상태 변경)
@@ -56,6 +58,7 @@ class Order {
         int driverId;
         Location deliveryLocation;
         OrderStatus status;
+        double deliveryFee;
 
         const Orderer* orderer;
         const Store* store;
