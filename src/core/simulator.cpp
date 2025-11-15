@@ -11,6 +11,8 @@
 #include <ctime>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <chrono>
+#include <thread>
 
 // 통계 데이터 구조체
 struct DriverStats {
@@ -54,9 +56,42 @@ struct Event {
     }
 };
 
-Simulator::Simulator() : deliverySystem(nullptr), 
+// 시뮬레이터 상수 정의
+const double Simulator::DRIVER_SPEED = 1.0;
+const int Simulator::DEFAULT_SIMULATION_TIME = 600; // 기본 10분 = 600초
+
+// 전략 패턴 구현
+bool SystemSelectionStrategy::shouldDispatch(int currentTime, int lastDispatchTime) {
+    return (currentTime - lastDispatchTime) >= DISPATCH_INTERVAL;
+}
+
+int SystemSelectionStrategy::getDispatchInterval() const {
+    return DISPATCH_INTERVAL;
+}
+
+string SystemSelectionStrategy::getName() const {
+    return "SystemSelection (1초마다 배차)";
+}
+
+bool DriverCallStrategy::shouldDispatch(int, int) {
+    // DriverCall은 주문 발생 시점과 기사 배달 완료 시점에 트리거됨
+    // 실제 트리거 조건은 시뮬레이션 루프에서 직접 처리
+    return false;
+}
+
+int DriverCallStrategy::getDispatchInterval() const {
+    return 0; // 이벤트 기반이므로 고정 간격 없음
+}
+
+string DriverCallStrategy::getName() const {
+    return "DriverCall (이벤트 트리거 방식)";
+}
+
+Simulator::Simulator() : deliverySystem(nullptr),
+                         dispatchStrategy(nullptr),
                          systemType(DRIVER_CALL),
-                         nextOrdererId(1), nextDriverId(1), 
+                         simulationTimeLimit(DEFAULT_SIMULATION_TIME),
+                         nextOrdererId(1), nextDriverId(1),
                          nextStoreId(1), nextOrderId(1) {
     // 기본값으로 DRIVER_CALL 시스템 초기화
     switchSystemType(DRIVER_CALL);
@@ -66,9 +101,13 @@ Simulator::~Simulator() {
     if (deliverySystem) {
         delete deliverySystem;
     }
-    
-    for (Order* order : orders) {
-        delete order;
+
+    if (dispatchStrategy) {
+        delete dispatchStrategy;
+    }
+
+    for (OrderSchedule& orderSchedule : scheduledOrders) {
+        delete orderSchedule.order;
     }
 }
 
@@ -77,20 +116,28 @@ void Simulator::switchSystemType(SystemType newType) {
         delete deliverySystem;
         deliverySystem = nullptr;
     }
-    
+
+    if (dispatchStrategy) {
+        delete dispatchStrategy;
+        dispatchStrategy = nullptr;
+    }
+
     systemType = newType;
-    
+
     switch (systemType) {
         case DRIVER_CALL:
             deliverySystem = new DeliverySystemWithDriverCall();
+            dispatchStrategy = new DriverCallStrategy();
             cout << "[시스템 모드 변경] DriverCall 방식으로 변경되었습니다." << endl;
             break;
         case SYSTEM_SELECTION:
             deliverySystem = new DeliverySystemWithSystemSelection();
+            dispatchStrategy = new SystemSelectionStrategy();
             cout << "[시스템 모드 변경] SystemSelection 방식으로 변경되었습니다." << endl;
             break;
         case MOCK:
             deliverySystem = nullptr;
+            dispatchStrategy = nullptr;
             cout << "[시스템 모드 변경] Mock 모드로 변경되었습니다." << endl;
             break;
     }
@@ -160,12 +207,18 @@ void Simulator::simulateWithUserInput() {
 
         } else if (cmd == "add_store") {
             int x, y;
+            double feePerDistance = 200.0; // 기본 배달 단가 (거리 1당 200원)
             string name;
             iss >> name >> x >> y;
 
+            // 배달 단가가 주어진 경우
+            if (iss >> feePerDistance) {
+                // 추가 입력 처리됨
+            }
+
             int id = nextStoreId++;
             Location loc(x, y);
-            Store store(id, name, loc);
+            Store store(id, name, loc, feePerDistance);
 
             if (deliverySystem) {
                 deliverySystem->addStore(store);
@@ -174,11 +227,19 @@ void Simulator::simulateWithUserInput() {
             stores.push_back(store);
 
             cout << "[매장 추가] ID: " << id << ", 이름: " << name
-                 << ", 위치: (" << x << ", " << y << ")" << endl;
+                 << ", 위치: (" << x << ", " << y << "), 배달 단가: " << (int)feePerDistance << "원/거리" << endl;
 
         } else if (cmd == "add_order") {
-            int ordererId, storeId, x, y;
+            int ordererId, storeId, x, y, orderTime = -1;
             iss >> ordererId >> storeId >> x >> y;
+
+            // 주문 시간이 주어진 경우
+            if (iss >> orderTime) {
+                // 추가 입력 처리됨
+            } else {
+                // 주문 시간이 주어지지 않으면 랜덤 생성
+                orderTime = generateRandomOrderTime();
+            }
 
             int orderId = nextOrderId++;
             Location deliveryLoc(x, y);
@@ -196,18 +257,20 @@ void Simulator::simulateWithUserInput() {
             });
             if (storeIt != stores.end()) {
                 order->setStore(&(*storeIt));
+                // 배달비 계산
+                double distance = storeIt->getLocation().calculateDistance(deliveryLoc);
+                double deliveryFee = distance * storeIt->getFeePerDistance();
+                order->setDeliveryFee(deliveryFee);
             }
 
-            if (deliverySystem) {
-                deliverySystem->addOrder(*order);
-            }
-
-            orders.push_back(order);
+            scheduledOrders.push_back(OrderSchedule(order, orderTime));
 
             cout << "[주문 추가] 주문 ID: " << orderId
                  << ", 주문자 ID: " << ordererId
                  << ", 매장 ID: " << storeId
-                 << ", 배달 위치: (" << x << ", " << y << ")" << endl;
+                 << ", 배달 위치: (" << x << ", " << y << ")"
+                 << ", 주문 시간: " << orderTime << "초"
+                 << ", 배달비: " << (int)order->getDeliveryFee() << "원" << endl;
 
         } else if (cmd == "add_orderer_random") {
             int n;
@@ -275,22 +338,27 @@ void Simulator::simulateWithUserInput() {
             }
 
             cout << "[" << n << "개의 매장을 랜덤으로 추가합니다]" << endl;
+            static random_device rd;
+            static mt19937 gen(rd());
+            uniform_real_distribution<> feeDis(150.0, 250.0); // 배달 단가 150~250원/거리 랜덤
+
             for (int i = 0; i < n; i++) {
                 string name = generateRandomName("Store");
                 int x = generateRandomCoordinate(0, 100);
                 int y = generateRandomCoordinate(0, 100);
+                double feePerDistance = feeDis(gen);
                 int id = nextStoreId++;
 
                 Location loc(x, y);
-                Store store(id, name, loc);
+                Store store(id, name, loc, feePerDistance);
 
                 if (deliverySystem) {
                     deliverySystem->addStore(store);
                 }
 
                 stores.push_back(store);
-                cout << "  ID: " << id << ", 이름: " << name 
-                     << ", 위치: (" << x << ", " << y << ")" << endl;
+                cout << "  ID: " << id << ", 이름: " << name
+                     << ", 위치: (" << x << ", " << y << "), 배달 단가: 200원/거리" << endl;
             }
 
         } else if (cmd == "add_order_random") {
@@ -325,6 +393,7 @@ void Simulator::simulateWithUserInput() {
                 int storeId = stores[storeDis(gen)].getId();
                 int x = generateRandomCoordinate(0, 100);
                 int y = generateRandomCoordinate(0, 100);
+                int orderTime = generateRandomOrderTime();
 
                 Location deliveryLoc(x, y);
                 Order* order = new Order(orderId, ordererId, storeId, deliveryLoc);
@@ -341,17 +410,19 @@ void Simulator::simulateWithUserInput() {
                 });
                 if (storeIt != stores.end()) {
                     order->setStore(&(*storeIt));
+                    // 배달비 계산
+                    double distance = storeIt->getLocation().calculateDistance(deliveryLoc);
+                    double deliveryFee = distance * storeIt->getFeePerDistance();
+                    order->setDeliveryFee(deliveryFee);
                 }
 
-                if (deliverySystem) {
-                    deliverySystem->addOrder(*order);
-                }
-
-                orders.push_back(order);
-                cout << "  주문 ID: " << orderId 
+                scheduledOrders.push_back(OrderSchedule(order, orderTime));
+                cout << "  주문 ID: " << orderId
                      << ", 주문자 ID: " << ordererId
                      << ", 매장 ID: " << storeId
-                     << ", 배달 위치: (" << x << ", " << y << ")" << endl;
+                     << ", 배달 위치: (" << x << ", " << y << ")"
+                     << ", 주문 시간: " << orderTime << "초"
+                     << ", 배달비: " << (int)order->getDeliveryFee() << "원" << endl;
             }
 
         } else if (cmd == "add_all_random" || cmd == "aar") {
@@ -415,7 +486,7 @@ void Simulator::simulateWithUserInput() {
                 int id = nextStoreId++;
 
                 Location loc(x, y);
-                Store store(id, name, loc);
+                Store store(id, name, loc, 200.0); // 기본 배달 단가
 
                 if (deliverySystem) {
                     deliverySystem->addStore(store);
@@ -458,15 +529,25 @@ void Simulator::simulateWithUserInput() {
                     order->setStore(&(*storeIt));
                 }
 
-                if (deliverySystem) {
-                    deliverySystem->addOrder(*order);
+                int orderTime = generateRandomOrderTime();
+
+                // 배달비 계산
+                auto storeIt2 = find_if(stores.begin(), stores.end(), [&](const Store& s) {
+                    return s.getId() == storeId;
+                });
+                if (storeIt2 != stores.end()) {
+                    double distance = storeIt2->getLocation().calculateDistance(deliveryLoc);
+                    double deliveryFee = distance * storeIt2->getFeePerDistance();
+                    order->setDeliveryFee(deliveryFee);
                 }
 
-                orders.push_back(order);
-                cout << "  주문 ID: " << orderId 
+                scheduledOrders.push_back(OrderSchedule(order, orderTime));
+                cout << "  주문 ID: " << orderId
                      << ", 주문자 ID: " << ordererId
                      << ", 매장 ID: " << storeId
-                     << ", 배달 위치: (" << x << ", " << y << ")" << endl;
+                     << ", 배달 위치: (" << x << ", " << y << ")"
+                     << ", 주문 시간: " << orderTime << "초"
+                     << ", 배달비: " << (int)order->getDeliveryFee() << "원" << endl;
             }
 
             cout << "\n[완료] 주문자 " << nOrderers << "명, 기사 " << nDrivers 
@@ -500,9 +581,35 @@ void Simulator::simulateWithUserInput() {
                 cout << "잘못된 시스템 타입입니다. (driver_call, system_selection 중 하나를 입력하세요)" << endl;
             }
 
+        } else if (cmd == "set_time") {
+            int timeInSeconds;
+            iss >> timeInSeconds;
+
+            if (timeInSeconds <= 0) {
+                cout << "시간은 1초 이상이어야 합니다." << endl;
+                continue;
+            }
+
+            simulationTimeLimit = timeInSeconds;
+            int minutes = timeInSeconds / 60;
+            int seconds = timeInSeconds % 60;
+
+            cout << "[시뮬레이션 시간 설정] " << timeInSeconds << "초";
+            if (minutes > 0) {
+                cout << " (" << minutes << "분 " << seconds << "초)";
+            }
+            cout << "로 설정되었습니다." << endl;
+
         } else if (cmd == "start" || cmd == "s") {
-            cout << "\n시뮬레이션을 시작합니다...\n" << endl;
-            runSimulation();
+            int minutes = simulationTimeLimit / 60;
+            int seconds = simulationTimeLimit % 60;
+            cout << "\n실시간 시뮬레이션을 시작합니다 (시간 제한: "
+                 << simulationTimeLimit << "초";
+            if (minutes > 0) {
+                cout << " = " << minutes << "분 " << seconds << "초";
+            }
+            cout << ")...\n" << endl;
+            runRealTimeSimulation();
 
         } else if (cmd == "quit" || cmd == "exit" || cmd == "q") {
             cout << "시뮬레이터를 종료합니다." << endl;
@@ -517,8 +624,8 @@ void Simulator::simulateWithUserInput() {
     }
 }
 
-void Simulator::runSimulation() {
-    if (orders.empty()) {
+void Simulator::runRealTimeSimulation() {
+    if (scheduledOrders.empty()) {
         cout << "주문이 없습니다. 시뮬레이션을 진행할 수 없습니다." << endl;
         return;
     }
@@ -534,356 +641,191 @@ void Simulator::runSimulation() {
     }
 
     printSeparator();
-    cout << "시뮬레이션 진행" << endl;
+    int minutes = simulationTimeLimit / 60;
+    int seconds = simulationTimeLimit % 60;
+    cout << "실시간 시뮬레이션 시작 - " << dispatchStrategy->getName() << endl;
+    cout << "시간 제한: " << simulationTimeLimit << "초";
+    if (minutes > 0) {
+        cout << " (" << minutes << "분 " << seconds << "초)";
+    }
+    cout << endl;
     printSeparator();
 
-    vector<Orderer> orderersCopy;
-    vector<Driver> driversCopy;
-    vector<Store> storesCopy;
-    vector<Order*> ordersCopy;
+    // 주문을 시간 순으로 정렬
+    sort(scheduledOrders.begin(), scheduledOrders.end(),
+         [](const OrderSchedule& a, const OrderSchedule& b) {
+             return a.orderTime < b.orderTime;
+         });
 
-    for (const Orderer& orderer : orderers) {
-        orderersCopy.push_back(Orderer(orderer.getId(), orderer.getName(), orderer.getLocation()));
-    }
+    // 시뮬레이션 상태 초기화
+    map<int, Location> driverLocations;
+    map<int, int> driverStates; // 0: 대기, 1: 픽업중, 2: 배달중
+    map<int, double> driverAvailableTime;
+    map<int, int> driverCurrentOrder;
+    vector<Order*> pendingOrders;
+    vector<Order*> completedOrders;
+
+    int currentTime = 0;
+    int lastDispatchTime = -1;
+    int orderIndex = 0;
 
     for (const Driver& driver : drivers) {
-        driversCopy.push_back(Driver(driver.getId(), driver.getName(), driver.getCurrentLocation()));
+        driverLocations[driver.getId()] = driver.getCurrentLocation();
+        driverStates[driver.getId()] = 0; // 대기 상태
+        driverAvailableTime[driver.getId()] = 0.0;
+        driverCurrentOrder[driver.getId()] = -1;
     }
 
-    for (const Store& store : stores) {
-        storesCopy.push_back(Store(store.getId(), store.getName(), store.getLocation()));
-    }
-
-    for (Order* order : orders) {
-        Order* newOrder = new Order(order->getOrderId(), order->getOrdererId(), 
-                                   order->getStoreId(), order->getDeliveryLocation());
-        ordersCopy.push_back(newOrder);
-    }
-
-    if (systemType != MOCK && deliverySystem) {
-        for (const Orderer& orderer : orderersCopy) {
+    // 배달 시스템 초기화
+    if (deliverySystem) {
+        for (const Orderer& orderer : orderers) {
             deliverySystem->addOrderer(orderer);
         }
-        for (const Driver& driver : driversCopy) {
+        for (const Driver& driver : drivers) {
             deliverySystem->addDriver(driver);
         }
-        for (const Store& store : storesCopy) {
+        for (const Store& store : stores) {
             deliverySystem->addStore(store);
         }
-        for (Order* order : ordersCopy) {
-            deliverySystem->addOrder(*order);
-        }
-
         deliverySystem->initializeMap();
-        cout << "[시스템] 엔티티 복사 및 Map 초기화 완료" << endl;
     }
 
-    const double SPEED = 1.0;
+    cout << "[시간: 0초] 시뮬레이션 시작" << endl;
 
-    map<int, DriverStats> driverStats;
-    map<int, OrderStats> orderStats;
-    map<int, Location> driverLocations;
-    map<int, double> driverAvailableTime;
-    map<int, Store*> storeMap;
-    map<int, string> driverNames;
-    
-    map<int, vector<int>> driverCallQueue;
-    map<int, bool> orderAssigned;
+    // 메인 시뮬레이션 루프
+    while (currentTime < simulationTimeLimit &&
+           (static_cast<size_t>(orderIndex) < scheduledOrders.size() || !pendingOrders.empty() ||
+            any_of(driverStates.begin(), driverStates.end(),
+                   [](const pair<int, int>& p) { return p.second != 0; }))) {
 
-    for (const Driver& driver : driversCopy) {
-        driverStats[driver.getId()] = DriverStats();
-        driverLocations[driver.getId()] = driver.getCurrentLocation();
-        driverAvailableTime[driver.getId()] = 0.0;
-        driverNames[driver.getId()] = driver.getName();
-        driverCallQueue[driver.getId()] = vector<int>();
-    }
+        bool newOrderAdded = false;
+        bool driverCompleted = false;
 
-    for (Store& store : storesCopy) {
-        storeMap[store.getId()] = &store;
-    }
+        // 새로운 주문 추가
+        while (static_cast<size_t>(orderIndex) < scheduledOrders.size() &&
+               scheduledOrders[orderIndex].orderTime <= currentTime) {
+            Order* newOrder = scheduledOrders[orderIndex].order;
+            pendingOrders.push_back(newOrder);
 
-    for (Order* order : ordersCopy) {
-        orderAssigned[order->getOrderId()] = false;
-    }
-
-    vector<Event> events;
-    vector<string> eventLogs;  // 이벤트 로그를 저장할 벡터
-    double currentTime = 0.0;
-
-    if (systemType != MOCK) {
-        if (deliverySystem) {
-            deliverySystem->acceptCall();
-        }
-        
-        vector<Order*>& systemOrders = deliverySystem->getAllOrders();
-        
-        for (Order* order : systemOrders) {
-            if (order->getDriverId() != -1) {
-                int driverId = order->getDriverId();
-                
-                const Store* orderStore = order->getStore();
-                if (!orderStore) continue;
-                
-                Location storeLocation = orderStore->getLocation();
-                Location driverLoc = driverLocations[driverId];
-                
-                double pickupDistance = driverLoc.calculateDistance(storeLocation);
-                double pickupTime = pickupDistance / SPEED;
-                double pickupCompleteTime = driverAvailableTime[driverId] + pickupTime;
-                
-                Location deliveryLocation = order->getDeliveryLocation();
-                double deliveryDistance = storeLocation.calculateDistance(deliveryLocation);
-                double deliveryTime = deliveryDistance / SPEED;
-                double deliveryCompleteTime = pickupCompleteTime + deliveryTime;
-                
-                events.push_back(Event(driverAvailableTime[driverId], EVENT_ORDER_ASSIGNED, 
-                                      order->getOrderId(), driverId, driverLocations[driverId]));
-                events.push_back(Event(pickupCompleteTime, EVENT_PICKUP_COMPLETE, 
-                                      order->getOrderId(), driverId, storeLocation, pickupDistance));
-                events.push_back(Event(deliveryCompleteTime, EVENT_DELIVERY_COMPLETE, 
-                                      order->getOrderId(), driverId, deliveryLocation, deliveryDistance));
-                
-                driverAvailableTime[driverId] = deliveryCompleteTime;
-                driverLocations[driverId] = deliveryLocation;
-                
-                OrderStats oStats;
-                oStats.orderId = order->getOrderId();
-                oStats.driverId = driverId;
-                oStats.pickupDistance = pickupDistance;
-                oStats.deliveryDistance = deliveryDistance;
-                oStats.totalTime = pickupTime + deliveryTime;
-                orderStats[order->getOrderId()] = oStats;
-                
-                driverStats[driverId].deliveryCount++;
-                driverStats[driverId].totalDistance += (pickupDistance + deliveryDistance);
-                driverStats[driverId].completedOrders.push_back(order->getOrderId());
-            }
-        }
-        
-        string dispatchMsg = "[시간: 0.0초] 배차 시스템을 통해 모든 주문이 배차되었습니다.";
-        cout << "\n" << dispatchMsg << "\n" << endl;
-        eventLogs.push_back(dispatchMsg);
-    } else {
-        for (Order* order : ordersCopy) {
-            for (const Driver& driver : driversCopy) {
-                driverCallQueue[driver.getId()].push_back(order->getOrderId());
-        }
-    }
-
-    string mockDispatchMsg = "[시간: 0.0초] 모든 주문이 기사들에게 배차 요청되었습니다.";
-    cout << "\n" << mockDispatchMsg << "\n" << endl;
-    eventLogs.push_back(mockDispatchMsg);
-
-    bool allOrdersAssigned = false;
-    
-    while (!allOrdersAssigned) {
-        for (const Driver& driver : driversCopy) {
-            int driverId = driver.getId();
-            
-            if (driverAvailableTime[driverId] > currentTime) {
-                continue;
+            if (deliverySystem) {
+                deliverySystem->addOrder(*newOrder);
             }
 
-            if (driverCallQueue[driverId].empty()) {
-                continue;
-            }
+            cout << "[시간: " << currentTime << "초] 새로운 주문 발생 - 주문 ID: "
+                 << newOrder->getOrderId() << ", 배달비: " << (int)newOrder->getDeliveryFee() << "원" << endl;
 
-            int bestOrderId = -1;
-            double minDistance = -1;
-            Location driverLoc = driverLocations[driverId];
-
-            for (int orderId : driverCallQueue[driverId]) {
-                if (orderAssigned[orderId]) continue;
-
-                Order* order = nullptr;
-                for (Order* o : ordersCopy) {
-                    if (o->getOrderId() == orderId) {
-                        order = o;
-                        break;
-                    }
-                }
-                if (!order) continue;
-
-                Store* targetStore = storeMap[order->getStoreId()];
-                if (!targetStore) continue;
-
-                double distance = driverLoc.calculateDistance(targetStore->getLocation());
-                
-                if (minDistance < 0 || distance < minDistance) {
-                    minDistance = distance;
-                    bestOrderId = orderId;
-                }
-            }
-
-            if (bestOrderId == -1) {
-                continue;
-            }
-
-            try {
-                Order* assignedOrder = nullptr;
-                for (Order* o : ordersCopy) {
-                    if (o->getOrderId() == bestOrderId) {
-                        assignedOrder = o;
-                        break;
-                    }
-                }
-
-                if (!assignedOrder) continue;
-
-                assignedOrder->assignDriver(driverId);
-                orderAssigned[bestOrderId] = true;
-
-                Store* targetStore = storeMap[assignedOrder->getStoreId()];
-                Location storeLocation = targetStore->getLocation();
-                
-                double pickupDistance = driverLocations[driverId].calculateDistance(storeLocation);
-                double pickupTime = pickupDistance / SPEED;
-                double pickupCompleteTime = driverAvailableTime[driverId] + pickupTime;
-
-                Location deliveryLocation = assignedOrder->getDeliveryLocation();
-                double deliveryDistance = storeLocation.calculateDistance(deliveryLocation);
-                double deliveryTime = deliveryDistance / SPEED;
-                double deliveryCompleteTime = pickupCompleteTime + deliveryTime;
-
-                events.push_back(Event(driverAvailableTime[driverId], EVENT_ORDER_ASSIGNED, 
-                                      bestOrderId, driverId, driverLocations[driverId]));
-                events.push_back(Event(pickupCompleteTime, EVENT_PICKUP_COMPLETE, 
-                                      bestOrderId, driverId, storeLocation, pickupDistance));
-                events.push_back(Event(deliveryCompleteTime, EVENT_DELIVERY_COMPLETE, 
-                                      bestOrderId, driverId, deliveryLocation, deliveryDistance));
-
-                driverAvailableTime[driverId] = deliveryCompleteTime;
-                driverLocations[driverId] = deliveryLocation;
-
-                OrderStats oStats;
-                oStats.orderId = bestOrderId;
-                oStats.driverId = driverId;
-                oStats.pickupDistance = pickupDistance;
-                oStats.deliveryDistance = deliveryDistance;
-                oStats.totalTime = pickupTime + deliveryTime;
-                orderStats[bestOrderId] = oStats;
-
-                driverStats[driverId].deliveryCount++;
-                driverStats[driverId].totalDistance += (pickupDistance + deliveryDistance);
-                driverStats[driverId].completedOrders.push_back(bestOrderId);
-
-            } catch (...) {
-            }
+            newOrderAdded = true;
+            orderIndex++;
         }
 
-        allOrdersAssigned = true;
-        for (const auto& pair : orderAssigned) {
-            if (!pair.second) {
-                allOrdersAssigned = false;
-                break;
-            }
-        }
+        // 기사 상태 업데이트 (픽업/배달 완료 처리)
+        for (auto& driverPair : driverStates) {
+            int driverId = driverPair.first;
+            int& state = driverPair.second;
 
-        if (!allOrdersAssigned) {
-            double minNextAvailable = -1;
-            for (const auto& pair : driverAvailableTime) {
-                if (pair.second > currentTime) {
-                    if (minNextAvailable < 0 || pair.second < minNextAvailable) {
-                        minNextAvailable = pair.second;
-                    }
-                }
-            }
+            if (state != 0 && driverAvailableTime[driverId] <= currentTime) {
+                int orderId = driverCurrentOrder[driverId];
 
-            if (minNextAvailable > 0) {
-                currentTime = minNextAvailable;
-                
-                    for (Order* order : ordersCopy) {
-                        if (!orderAssigned[order->getOrderId()]) {
-                            for (const Driver& driver : driversCopy) {
-                                if (driverAvailableTime[driver.getId()] <= currentTime) {
-                                    bool alreadyInQueue = false;
-                                    for (int oid : driverCallQueue[driver.getId()]) {
-                                        if (oid == order->getOrderId()) {
-                                            alreadyInQueue = true;
-                                            break;
-                                        }
-                                    }
-                                    if (!alreadyInQueue) {
-                                        driverCallQueue[driver.getId()].push_back(order->getOrderId());
-                                }
-                            }
+                if (state == 1) { // 픽업 완료
+                    state = 2; // 배달 중 상태로 변경
+                    // 배달 시간 계산
+                    Order* order = nullptr;
+                    for (Order* o : pendingOrders) {
+                        if (o->getOrderId() == orderId) {
+                            order = o;
+                            break;
                         }
                     }
+                    if (order) {
+                        order->completePickup();
+                        Location deliveryLoc = order->getDeliveryLocation();
+                        double deliveryDistance = driverLocations[driverId].calculateDistance(deliveryLoc);
+                        double deliveryTime = deliveryDistance / DRIVER_SPEED;
+                        driverAvailableTime[driverId] = currentTime + deliveryTime;
+
+                        cout << "[시간: " << currentTime << "초] 기사 #" << driverId
+                             << " 픽업 완료, 배달 시작 (주문 ID: " << orderId << ")" << endl;
+                    }
+                } else if (state == 2) { // 배달 완료
+                    state = 0; // 대기 상태로 변경
+                    driverCurrentOrder[driverId] = -1;
+
+                    // 완료된 주문 처리
+                    for (auto it = pendingOrders.begin(); it != pendingOrders.end(); ++it) {
+                        if ((*it)->getOrderId() == orderId) {
+                            (*it)->completeDelivery();
+                            completedOrders.push_back(*it);
+                            driverLocations[driverId] = (*it)->getDeliveryLocation();
+                            pendingOrders.erase(it);
+                            break;
+                        }
+                    }
+
+                    cout << "[시간: " << currentTime << "초] 기사 #" << driverId
+                         << " 배달 완료! (주문 ID: " << orderId << ")" << endl;
+
+                    driverCompleted = true;
                 }
-            } else {
-                break;
-            }
             }
         }
-    }
 
-    sort(events.begin(), events.end());
+        // 배차 처리 조건 확인
+        bool shouldCallDispatch = false;
 
-    for (const Event& event : events) {
-        Order* currentOrder = nullptr;
-        ostringstream logStream;
-        
-        switch (event.type) {
-            case EVENT_ORDER_ASSIGNED:
-                logStream << "[시간: " << fixed << setprecision(1) << event.time
-                          << "초] 기사 #" << event.driverId << " (" << driverNames[event.driverId]
-                          << ")이(가) 주문 #" << event.orderId << "을(를) 수락했습니다.";
-                cout << logStream.str() << endl;
-                eventLogs.push_back(logStream.str());
-                break;
-
-            case EVENT_PICKUP_COMPLETE:
-                for (Order* o : ordersCopy) {
-                    if (o->getOrderId() == event.orderId) {
-                        currentOrder = o;
-                        break;
-                    }
-                }
-                if (currentOrder) {
-                    currentOrder->completePickup();
-                    Store* store = storeMap[currentOrder->getStoreId()];
-                    logStream << "[시간: " << fixed << setprecision(1) << event.time
-                              << "초] 기사 #" << event.driverId << "이(가) 매장 #" << store->getId()
-                              << " (" << store->getName() << ")에서 주문 #" << event.orderId
-                              << " 픽업 완료 (거리: " << fixed << setprecision(2) << event.distance << ")";
-                    cout << logStream.str() << endl;
-                    eventLogs.push_back(logStream.str());
-                }
-                break;
-
-            case EVENT_DELIVERY_COMPLETE:
-                for (Order* o : ordersCopy) {
-                    if (o->getOrderId() == event.orderId) {
-                        currentOrder = o;
-                        break;
-                    }
-                }
-                if (currentOrder) {
-                    currentOrder->completeDelivery();
-                    logStream << "[시간: " << fixed << setprecision(1) << event.time
-                              << "초] 기사 #" << event.driverId << "이(가) 주문 #" << event.orderId
-                              << " 배달 완료! (거리: " << fixed << setprecision(2) << event.distance << ")";
-                    cout << logStream.str() << endl;
-                    eventLogs.push_back(logStream.str());
-                }
-                break;
+        if (systemType == SYSTEM_SELECTION) {
+            // SystemSelection: 정기적으로 배차
+            shouldCallDispatch = dispatchStrategy->shouldDispatch(currentTime, lastDispatchTime);
+        } else if (systemType == DRIVER_CALL) {
+            // DriverCall: 새 주문이나 기사 완료 시 배차
+            shouldCallDispatch = newOrderAdded || driverCompleted;
         }
+
+        // 배차 처리
+        if (shouldCallDispatch && deliverySystem && !pendingOrders.empty()) {
+            deliverySystem->acceptCall();
+            lastDispatchTime = currentTime;
+
+            // 새로 할당된 주문들 처리
+            vector<Order*>& systemOrders = deliverySystem->getAllOrders();
+            for (Order* order : systemOrders) {
+                if (order->getDriverId() != -1 && driverStates[order->getDriverId()] == 0) {
+                    int driverId = order->getDriverId();
+                    driverStates[driverId] = 1; // 픽업 중 상태
+                    driverCurrentOrder[driverId] = order->getOrderId();
+
+                    // 픽업 시간 계산
+                    Location storeLocation = order->getStore()->getLocation();
+                    double pickupDistance = driverLocations[driverId].calculateDistance(storeLocation);
+                    double pickupTime = pickupDistance / DRIVER_SPEED;
+                    driverAvailableTime[driverId] = currentTime + pickupTime;
+
+                    cout << "[시간: " << currentTime << "초] 기사 #" << driverId
+                         << " 배차 수락, 픽업 시작 (주문 ID: " << order->getOrderId() << ")" << endl;
+                }
+            }
+        }
+
+        // 현재 상태 출력 (매초마다)
+        printSimulationStatus(currentTime, driverLocations, driverStates, pendingOrders);
+
+        // 1초 대기 (실제 시간)
+        this_thread::sleep_for(chrono::seconds(1));
+        currentTime++;
     }
 
-    double totalTime = events.empty() ? 0.0 : events.back().time;
-    cout << "\n모든 주문이 처리되었습니다!\n" << endl;
+    cout << "\n[시뮬레이션 종료] 총 " << completedOrders.size() << "건 완료" << endl;
+    printSeparator();
+}
 
-    printSimulationResults(driverStats, orderStats, totalTime, eventLogs, driverNames);
-    
-    for (Order* order : ordersCopy) {
-        delete order;
-    }
+void Simulator::runSimulation() {
+    // 기존 runSimulation()을 유지하여 하위 호환성 보장
+    runRealTimeSimulation();
 }
 
 void Simulator::printSimulationResults(const map<int, DriverStats>& driverStats,
                                        const map<int, OrderStats>& orderStats,
                                        double totalTime,
-                                       const vector<string>& eventLogs,
+                                       const vector<string>&,
                                        const map<int, string>& driverNames) {
     printSeparator();
     cout << "시뮬레이션 결과" << endl;
@@ -899,8 +841,6 @@ void Simulator::printSimulationResults(const map<int, DriverStats>& driverStats,
         cout << "기사별 통계:" << endl;
         printSeparator();
 
-        double totalDistance = 0.0;
-        int totalDeliveries = 0;
 
         for (const auto& pair : driverStats) {
             int driverId = pair.first;
@@ -914,156 +854,17 @@ void Simulator::printSimulationResults(const map<int, DriverStats>& driverStats,
 
             cout << "기사 #" << driverId << " (" << driverName << ")" << endl;
             cout << "  - 배달 완료: " << stats.deliveryCount << "건" << endl;
-            cout << "  - 총 이동 거리: " << fixed << setprecision(2)
-                 << stats.totalDistance << endl;
-
-            if (stats.deliveryCount > 0) {
-                cout << "  - 평균 이동 거리: " << fixed << setprecision(2)
-                     << (stats.totalDistance / stats.deliveryCount) << endl;
-            }
-            cout << endl;
-
-            totalDistance += stats.totalDistance;
-            totalDeliveries += stats.deliveryCount;
         }
-
-        // 전체 평균 통계
-        if (totalDeliveries > 0) {
-            cout << "전체 평균 통계:" << endl;
-            printSeparator();
-            cout << "평균 이동 거리: " << fixed << setprecision(2)
-                 << (totalDistance / totalDeliveries) << endl;
-
-            if (totalTime > 0) {
-                cout << "평균 배달 시간: " << fixed << setprecision(1)
-                     << (totalTime / totalDeliveries) << "초" << endl;
-            }
-        }
-    } else {
-        cout << "시뮬레이션 데이터가 없습니다." << endl;
     }
 
-    saveResultsToFile(driverStats, orderStats, totalTime, eventLogs);
     printSeparator();
 }
 
-void Simulator::saveResultsToFile(const map<int, DriverStats>& driverStats,
-                                  const map<int, OrderStats>& orderStats,
-                                  double totalTime,
-                                  const vector<string>& eventLogs) {
-    // out 디렉토리 생성
-    mkdir("out", 0755);
-    
-    // 현재 시간으로 타임스탬프 생성
-    time_t now = time(nullptr);
-    tm* ltm = localtime(&now);
-    
-    ostringstream filename;
-    filename << "out/simulation_result_"
-             << (1900 + ltm->tm_year)
-             << setfill('0') << setw(2) << (1 + ltm->tm_mon)
-             << setfill('0') << setw(2) << ltm->tm_mday << "_"
-             << setfill('0') << setw(2) << ltm->tm_hour
-             << setfill('0') << setw(2) << ltm->tm_min
-             << setfill('0') << setw(2) << ltm->tm_sec
-             << ".txt";
-    
-    ofstream outFile(filename.str());
-
-    if (!outFile.is_open()) {
-        cout << "결과 파일 저장에 실패했습니다." << endl;
-        return;
-    }
-
-    outFile << "====================================\n";
-    outFile << "    배달 시스템 시뮬레이션 결과\n";
-    outFile << "====================================\n\n";
-
-    // 사용된 시스템 타입 출력
-    string systemTypeStr;
-    switch (systemType) {
-        case MOCK: systemTypeStr = "Mock 모드"; break;
-        case DRIVER_CALL: systemTypeStr = "DriverCall 방식"; break;
-        case SYSTEM_SELECTION: systemTypeStr = "SystemSelection 방식"; break;
-    }
-    outFile << "사용된 시스템: " << systemTypeStr << "\n\n";
-
-    // 이벤트 로그 출력
-    if (!eventLogs.empty()) {
-        outFile << "시뮬레이션 진행 로그:\n";
-        outFile << "------------------------------------\n";
-        for (const string& log : eventLogs) {
-            outFile << log << "\n";
-        }
-        outFile << "\n";
-    }
-
-    // 기본 통계
-    outFile << "총 주문 수: " << orderStats.size() << "건\n";
-    outFile << "완료된 주문 수: " << orderStats.size() << "건\n";
-    outFile << "전체 소요 시간: " << fixed << setprecision(1) << totalTime << "초\n\n";
-
-    // 기사별 통계
-    if (!driverStats.empty()) {
-        outFile << "기사별 통계:\n";
-        outFile << "------------------------------------\n";
-
-        double totalDistance = 0.0;
-        int totalDeliveries = 0;
-
-        for (const auto& pair : driverStats) {
-            const DriverStats& stats = pair.second;
-            outFile << "기사 ID: " << pair.first << "\n";
-            outFile << "  - 배달 완료: " << stats.deliveryCount << "건\n";
-            outFile << "  - 총 이동 거리: " << fixed << setprecision(2)
-                    << stats.totalDistance << "km\n";
-
-            if (stats.deliveryCount > 0) {
-                outFile << "  - 평균 이동 거리: " << fixed << setprecision(2)
-                        << (stats.totalDistance / stats.deliveryCount) << "km\n";
-            }
-            outFile << "\n";
-
-            totalDistance += stats.totalDistance;
-            totalDeliveries += stats.deliveryCount;
-        }
-
-        // 전체 평균 통계
-        if (totalDeliveries > 0) {
-            outFile << "전체 평균 통계:\n";
-            outFile << "------------------------------------\n";
-            outFile << "평균 이동 거리: " << fixed << setprecision(2)
-                    << (totalDistance / totalDeliveries) << "km\n";
-
-            if (totalTime > 0) {
-                outFile << "평균 배달 시간: " << fixed << setprecision(1)
-                        << (totalTime / totalDeliveries) << "초\n";
-            }
-        }
-    }
-
-    // 주문별 상세 정보
-    if (!orderStats.empty()) {
-        outFile << "\n주문별 상세 정보:\n";
-        outFile << "------------------------------------\n";
-
-        for (const auto& pair : orderStats) {
-            const OrderStats& stats = pair.second;
-            outFile << "주문 ID: " << stats.orderId << "\n";
-            outFile << "  - 담당 기사 ID: " << stats.driverId << "\n";
-            outFile << "  - 픽업 거리: " << fixed << setprecision(2)
-                    << stats.pickupDistance << "km\n";
-            outFile << "  - 배달 거리: " << fixed << setprecision(2)
-                    << stats.deliveryDistance << "km\n";
-            outFile << "  - 총 처리 시간: " << fixed << setprecision(1)
-                    << stats.totalTime << "초\n\n";
-        }
-    }
-
-    outFile << "====================================\n";
-    outFile.close();
-    
-    cout << "\n결과가 '" << filename.str() << "'에 저장되었습니다." << endl;
+void Simulator::saveResultsToFile(const map<int, DriverStats>&,
+                                  const map<int, OrderStats>&,
+                                  double,
+                                  const vector<string>&) {
+    cout << "\n결과 저장 기능은 추후 구현 예정입니다." << endl;
 }
 
 void Simulator::printHeader() {
@@ -1083,27 +884,30 @@ void Simulator::printHelp() {
     cout << "    - 주문자를 추가합니다. (ID는 자동 생성)" << endl;
     cout << "  add_driver <name> <x> <y>" << endl;
     cout << "    - 기사를 추가합니다. (ID는 자동 생성)" << endl;
-    cout << "  add_store <name> <x> <y>" << endl;
-    cout << "    - 매장을 추가합니다. (ID는 자동 생성)" << endl;
-    cout << "  add_order <ordererId> <storeId> <deliveryX> <deliveryY>" << endl;
-    cout << "    - 주문을 추가합니다. (주문 ID는 자동 생성)" << endl;
+    cout << "  add_store <name> <x> <y> [feePerDistance]" << endl;
+    cout << "    - 매장을 추가합니다. (ID는 자동 생성, 배달 단가 기본값: 200원/거리)" << endl;
+    cout << "  add_order <ordererId> <storeId> <deliveryX> <deliveryY> [orderTime]" << endl;
+    cout << "    - 주문을 추가합니다. (주문 ID는 자동 생성, 주문 시간 옵션)" << endl;
     cout << "  add_orderer_random <n>" << endl;
     cout << "    - n개의 주문자를 랜덤으로 추가합니다." << endl;
     cout << "  add_driver_random <n>" << endl;
     cout << "    - n개의 기사를 랜덤으로 추가합니다." << endl;
     cout << "  add_store_random <n>" << endl;
-    cout << "    - n개의 매장을 랜덤으로 추가합니다." << endl;
+    cout << "    - n개의 매장을 랜덤으로 추가합니다. (배달 단가 150~250원/거리)" << endl;
     cout << "  add_order_random <n>" << endl;
-    cout << "    - n개의 주문을 랜덤으로 추가합니다." << endl;
+    cout << "    - n개의 주문을 랜덤으로 추가합니다. (랜덤 주문 시간 포함)" << endl;
     cout << "  add_all_random <nOrderers> <nDrivers> <nStores> <nOrders> (별칭: aar)" << endl;
     cout << "    - 주문자, 기사, 매장, 주문을 한 번에 랜덤으로 추가합니다." << endl;
     cout << "  list" << endl;
     cout << "    - 모든 주문자, 기사, 매장, 주문을 조회합니다." << endl;
     cout << "  switch_system [type] (별칭: ss)" << endl;
     cout << "    - 배달 시스템 타입을 변경합니다. (driver_call, system_selection)" << endl;
-    cout << "    - 인자 없이 실행하면 driver_call ↔ system_selection 토글" << endl;
+    cout << "    - driver_call: 주문 발생/배달 완료 시 배차" << endl;
+    cout << "    - system_selection: 1초마다 정기적으로 배차" << endl;
+    cout << "  set_time <seconds>" << endl;
+    cout << "    - 시뮬레이션 시간을 초 단위로 설정합니다. (기본값: 600초 = 10분)" << endl;
     cout << "  start (별칭: s)" << endl;
-    cout << "    - 시뮬레이션을 시작합니다." << endl;
+    cout << "    - 실시간 시뮬레이션을 시작합니다. (1초마다 진행 상황 출력)" << endl;
     cout << "  help" << endl;
     cout << "    - 도움말을 출력합니다." << endl;
     cout << "  quit / exit (별칭: q)" << endl;
@@ -1111,11 +915,26 @@ void Simulator::printHelp() {
     printSeparator();
 }
 
+void Simulator::printSimulationStatus(int currentTime, const map<int, Location>&,
+                                      const map<int, int>& driverStates, const vector<Order*>& pendingOrders) {
+    // 나중에 visualize()로 교체될 예정
+    if (currentTime % 10 == 0) { // 10초마다 상태 출력
+        cout << "[상태 " << currentTime << "초] ";
+        cout << "대기 중 기사: ";
+        int waitingDrivers = 0;
+        for (const auto& pair : driverStates) {
+            if (pair.second == 0) waitingDrivers++;
+        }
+        cout << waitingDrivers << "명, ";
+        cout << "미배차 주문: " << pendingOrders.size() << "건" << endl;
+    }
+}
+
 string Simulator::generateRandomName(const string& prefix) {
     static random_device rd;
     static mt19937 gen(rd());
     static uniform_int_distribution<> dis(1000, 9999);
-    
+
     return prefix + to_string(dis(gen));
 }
 
@@ -1123,7 +942,15 @@ int Simulator::generateRandomCoordinate(int min, int max) {
     static random_device rd;
     static mt19937 gen(rd());
     uniform_int_distribution<> dis(min, max);
-    
+
+    return dis(gen);
+}
+
+int Simulator::generateRandomOrderTime() {
+    static random_device rd;
+    static mt19937 gen(rd());
+    uniform_int_distribution<> dis(0, simulationTimeLimit - 60); // 시뮬레이션 시간에서 1분 전까지
+
     return dis(gen);
 }
 
@@ -1131,7 +958,7 @@ void Simulator::listAll() {
     cout << "\n====================================" << endl;
     cout << "         전체 목록 조회" << endl;
     cout << "====================================" << endl;
-    
+
     listOrderers();
     cout << endl;
     listDrivers();
@@ -1146,13 +973,13 @@ void Simulator::listOrderers() {
         cout << "등록된 주문자가 없습니다." << endl;
         return;
     }
-    
+
     cout << "[주문자 목록 (총 " << orderers.size() << "명)]" << endl;
     printSeparator();
     for (const Orderer& orderer : orderers) {
         cout << "ID: " << orderer.getId()
              << ", 이름: " << orderer.getName()
-             << ", 위치: (" << orderer.getLocation().getX() << ", " 
+             << ", 위치: (" << orderer.getLocation().getX() << ", "
              << orderer.getLocation().getY() << ")" << endl;
     }
     printSeparator();
@@ -1163,13 +990,13 @@ void Simulator::listDrivers() {
         cout << "등록된 기사가 없습니다." << endl;
         return;
     }
-    
+
     cout << "[기사 목록 (총 " << drivers.size() << "명)]" << endl;
     printSeparator();
     for (const Driver& driver : drivers) {
         cout << "ID: " << driver.getId()
              << ", 이름: " << driver.getName()
-             << ", 위치: (" << driver.getCurrentLocation().getX() << ", " 
+             << ", 위치: (" << driver.getCurrentLocation().getX() << ", "
              << driver.getCurrentLocation().getY() << ")" << endl;
     }
     printSeparator();
@@ -1180,32 +1007,39 @@ void Simulator::listStores() {
         cout << "등록된 매장이 없습니다." << endl;
         return;
     }
-    
+
     cout << "[매장 목록 (총 " << stores.size() << "개)]" << endl;
     printSeparator();
     for (const Store& store : stores) {
         cout << "ID: " << store.getId()
              << ", 이름: " << store.getName()
-             << ", 위치: (" << store.getLocation().getX() << ", " 
-             << store.getLocation().getY() << ")" << endl;
+             << ", 위치: (" << store.getLocation().getX() << ", "
+             << store.getLocation().getY() << ")"
+             << ", 배달 단가: " << (int)store.getFeePerDistance() << "원/거리" << endl;
     }
     printSeparator();
 }
 
 void Simulator::listOrders() {
-    if (orders.empty()) {
+    if (scheduledOrders.empty()) {
         cout << "등록된 주문이 없습니다." << endl;
         return;
     }
-    
-    cout << "[주문 목록 (총 " << orders.size() << "건)]" << endl;
+
+    cout << "[주문 목록 (총 " << scheduledOrders.size() << "건)]" << endl;
     printSeparator();
-    for (const Order* order : orders) {
+    for (const OrderSchedule& orderSchedule : scheduledOrders) {
+        const Order* order = orderSchedule.order;
         cout << "주문 ID: " << order->getOrderId()
              << ", 주문자 ID: " << order->getOrdererId()
              << ", 매장 ID: " << order->getStoreId()
-             << ", 배달 위치: (" << order->getDeliveryLocation().getX() << ", " 
-             << order->getDeliveryLocation().getY() << ")" << endl;
+             << ", 배달 위치: (" << order->getDeliveryLocation().getX() << ", "
+             << order->getDeliveryLocation().getY() << ")"
+             << ", 주문 시간: " << orderSchedule.orderTime << "초"
+             << ", 배달비: " << (int)order->getDeliveryFee() << "원" << endl;
     }
     printSeparator();
 }
+
+
+
