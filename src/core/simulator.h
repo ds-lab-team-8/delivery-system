@@ -80,6 +80,9 @@ private:
     int nextStoreId;
     int nextOrderId;
 
+    // 순차적 주문 시간 관리
+    static int nextOrderTime;  // 다음 주문 시간 (정적 변수로 세션간 공유)
+
     // 시뮬레이션 메서드
     void runSimulation();
     void runRealTimeSimulation();  // 새로운 실시간 시뮬레이션

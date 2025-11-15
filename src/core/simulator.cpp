@@ -59,6 +59,7 @@ struct Event {
 // 시뮬레이터 상수 정의
 const double Simulator::DRIVER_SPEED = 1.0;
 const int Simulator::DEFAULT_SIMULATION_TIME = 600; // 기본 10분 = 600초
+int Simulator::nextOrderTime = 5; // 첫 번째 주문은 5초에 시작
 
 // 전략 패턴 구현
 bool SystemSelectionStrategy::shouldDispatch(int currentTime, int lastDispatchTime) {
@@ -718,53 +719,143 @@ void Simulator::runRealTimeSimulation() {
             orderIndex++;
         }
 
-        // 기사 상태 업데이트 (픽업/배달 완료 처리)
+        // 이동 중인 기사들의 실시간 위치 업데이트 (매초 점진적 이동)
+        map<int, Location> driverTargets; // 기사별 목적지
+        map<int, Location> driverStartPositions; // 기사별 이동 시작 위치
+        map<int, double> driverStartTimes; // 기사별 이동 시작 시간
+
         for (auto& driverPair : driverStates) {
             int driverId = driverPair.first;
-            int& state = driverPair.second;
+            int state = driverPair.second;
 
-            if (state != 0 && driverAvailableTime[driverId] <= currentTime) {
+            if (state == 1 || state == 2) { // 픽업 중 또는 배달 중
                 int orderId = driverCurrentOrder[driverId];
+                Order* order = nullptr;
 
-                if (state == 1) { // 픽업 완료
-                    state = 2; // 배달 중 상태로 변경
-                    // 배달 시간 계산
-                    Order* order = nullptr;
-                    for (Order* o : pendingOrders) {
+                // 현재 주문 찾기 (deliverySystem에서)
+                if (deliverySystem) {
+                    vector<Order*>& systemOrders = deliverySystem->getAllOrders();
+                    for (Order* o : systemOrders) {
                         if (o->getOrderId() == orderId) {
                             order = o;
                             break;
                         }
                     }
-                    if (order) {
-                        order->completePickup();
-                        Location deliveryLoc = order->getDeliveryLocation();
-                        double deliveryDistance = driverLocations[driverId].calculateDistance(deliveryLoc);
-                        double deliveryTime = deliveryDistance / DRIVER_SPEED;
-                        driverAvailableTime[driverId] = currentTime + deliveryTime;
+                }
 
-                        cout << "[시간: " << currentTime << "초] 기사 #" << driverId
-                             << " 픽업 완료, 배달 시작 (주문 ID: " << orderId << ")" << endl;
+                if (order) {
+                    Location currentPos = driverLocations[driverId];
+                    Location targetPos;
+
+                    if (state == 1) { // 픽업 중 - 매장으로 이동
+                        targetPos = order->getStore()->getLocation();
+                    } else { // 배달 중 - 배달지로 이동
+                        targetPos = order->getDeliveryLocation();
                     }
-                } else if (state == 2) { // 배달 완료
-                    state = 0; // 대기 상태로 변경
-                    driverCurrentOrder[driverId] = -1;
 
-                    // 완료된 주문 처리
-                    for (auto it = pendingOrders.begin(); it != pendingOrders.end(); ++it) {
-                        if ((*it)->getOrderId() == orderId) {
-                            (*it)->completeDelivery();
-                            completedOrders.push_back(*it);
-                            driverLocations[driverId] = (*it)->getDeliveryLocation();
-                            pendingOrders.erase(it);
+                    // 목적지와의 거리 계산
+                    double distanceToTarget = currentPos.calculateDistance(targetPos);
+
+                    if (distanceToTarget > DRIVER_SPEED) {
+                        // 아직 목적지에 도착하지 않음 - 이동 계속
+                        double dx = targetPos.getX() - currentPos.getX();
+                        double dy = targetPos.getY() - currentPos.getY();
+                        double totalDistance = sqrt(dx * dx + dy * dy);
+
+                        // 단위벡터 계산 (방향)
+                        double unitX = dx / totalDistance;
+                        double unitY = dy / totalDistance;
+
+                        // 속도에 따른 새로운 위치 계산
+                        double newX = currentPos.getX() + (unitX * DRIVER_SPEED);
+                        double newY = currentPos.getY() + (unitY * DRIVER_SPEED);
+
+                        // 위치 업데이트
+                        driverLocations[driverId] = Location((int)round(newX), (int)round(newY));
+
+                        // 이동 로그 출력
+                        cout << "[이동 " << currentTime << "초] 기사 #" << driverId
+                             << (state == 1 ? "(픽업중)" : "(배달중)")
+                             << ": (" << (int)round(newX) << ", " << (int)round(newY)
+                             << ") → 목적지: (" << targetPos.getX() << ", " << targetPos.getY()
+                             << "), 남은 거리: " << fixed << setprecision(1)
+                             << driverLocations[driverId].calculateDistance(targetPos) << endl;
+                    }
+                }
+            }
+        }
+
+        // 기사 상태 업데이트 (실제 위치 기반 픽업/배달 완료 처리)
+        for (auto& driverPair : driverStates) {
+            int driverId = driverPair.first;
+            int& state = driverPair.second;
+
+            if (state != 0) { // 이동 중인 기사들 체크
+                int orderId = driverCurrentOrder[driverId];
+                Order* order = nullptr;
+
+                // 현재 주문 찾기 (deliverySystem에서)
+                if (deliverySystem) {
+                    vector<Order*>& systemOrders = deliverySystem->getAllOrders();
+                    for (Order* o : systemOrders) {
+                        if (o->getOrderId() == orderId) {
+                            order = o;
                             break;
                         }
                     }
+                }
 
-                    cout << "[시간: " << currentTime << "초] 기사 #" << driverId
-                         << " 배달 완료! (주문 ID: " << orderId << ")" << endl;
+                if (order) {
+                    Location currentPos = driverLocations[driverId];
+                    Location targetPos;
 
-                    driverCompleted = true;
+                    if (state == 1) { // 픽업 중 - 매장으로 이동
+                        targetPos = order->getStore()->getLocation();
+                    } else { // 배달 중 - 배달지로 이동
+                        targetPos = order->getDeliveryLocation();
+                    }
+
+                    // 목적지 도착 확인 (거리 1.0 이하면 도착으로 간주)
+                    double distanceToTarget = currentPos.calculateDistance(targetPos);
+
+                    if (distanceToTarget <= DRIVER_SPEED) {
+                        // 목적지 도착!
+                        driverLocations[driverId] = targetPos; // 정확한 목적지 위치로 설정
+
+                        if (state == 1) { // 픽업 완료
+                            state = 2; // 배달 중 상태로 변경
+                            order->completePickup();
+
+                            Location storeLocation = order->getStore()->getLocation();
+                            Location deliveryLoc = order->getDeliveryLocation();
+
+                            cout << "[시간: " << currentTime << "초] 기사 #" << driverId
+                                 << " 픽업 완료! 매장: (" << storeLocation.getX() << ", " << storeLocation.getY()
+                                 << ") → 배달지: (" << deliveryLoc.getX() << ", " << deliveryLoc.getY()
+                                 << ") 배달 시작! (주문 ID: " << orderId << ")" << endl;
+
+                        } else if (state == 2) { // 배달 완료
+                            state = 0; // 대기 상태로 변경
+                            driverCurrentOrder[driverId] = -1;
+
+                            // 완료된 주문 처리
+                            for (auto it = pendingOrders.begin(); it != pendingOrders.end(); ++it) {
+                                if ((*it)->getOrderId() == orderId) {
+                                    (*it)->completeDelivery();
+                                    completedOrders.push_back(*it);
+
+                                    cout << "[시간: " << currentTime << "초] 기사 #" << driverId
+                                         << " 배달 완료! 최종 위치: (" << targetPos.getX() << ", " << targetPos.getY()
+                                         << "), 배달비: " << (int)(*it)->getDeliveryFee() << "원 (주문 ID: " << orderId << ")" << endl;
+
+                                    pendingOrders.erase(it);
+                                    break;
+                                }
+                            }
+
+                            driverCompleted = true;
+                        }
+                    }
                 }
             }
         }
@@ -793,14 +884,23 @@ void Simulator::runRealTimeSimulation() {
                     driverStates[driverId] = 1; // 픽업 중 상태
                     driverCurrentOrder[driverId] = order->getOrderId();
 
-                    // 픽업 시간 계산
+                    // 실제 이동 기반 시스템 - driverAvailableTime 사용하지 않음
                     Location storeLocation = order->getStore()->getLocation();
                     double pickupDistance = driverLocations[driverId].calculateDistance(storeLocation);
-                    double pickupTime = pickupDistance / DRIVER_SPEED;
-                    driverAvailableTime[driverId] = currentTime + pickupTime;
 
                     cout << "[시간: " << currentTime << "초] 기사 #" << driverId
-                         << " 배차 수락, 픽업 시작 (주문 ID: " << order->getOrderId() << ")" << endl;
+                         << " 배차 수락! 현재위치: (" << driverLocations[driverId].getX() << ", " << driverLocations[driverId].getY()
+                         << ") → 매장: (" << storeLocation.getX() << ", " << storeLocation.getY()
+                         << "), 거리: " << fixed << setprecision(1) << pickupDistance
+                         << ", 속도: " << DRIVER_SPEED << "/초 (주문 ID: " << order->getOrderId() << ")" << endl;
+
+                    // 할당된 주문을 pendingOrders에서 제거
+                    for (auto it = pendingOrders.begin(); it != pendingOrders.end(); ++it) {
+                        if ((*it)->getOrderId() == order->getOrderId()) {
+                            pendingOrders.erase(it);
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -915,19 +1015,28 @@ void Simulator::printHelp() {
     printSeparator();
 }
 
-void Simulator::printSimulationStatus(int currentTime, const map<int, Location>&,
+void Simulator::printSimulationStatus(int currentTime, const map<int, Location>& driverLocations,
                                       const map<int, int>& driverStates, const vector<Order*>& pendingOrders) {
-    // 나중에 visualize()로 교체될 예정
-    if (currentTime % 10 == 0) { // 10초마다 상태 출력
+    // 매 10초마다 요약 상태 출력
+    if (currentTime % 10 == 0) {
         cout << "[상태 " << currentTime << "초] ";
-        cout << "대기 중 기사: ";
-        int waitingDrivers = 0;
+
+        int waitingDrivers = 0, pickupDrivers = 0, deliveryDrivers = 0;
         for (const auto& pair : driverStates) {
-            if (pair.second == 0) waitingDrivers++;
+            switch (pair.second) {
+                case 0: waitingDrivers++; break;
+                case 1: pickupDrivers++; break;
+                case 2: deliveryDrivers++; break;
+            }
         }
-        cout << waitingDrivers << "명, ";
-        cout << "미배차 주문: " << pendingOrders.size() << "건" << endl;
+
+        cout << "대기: " << waitingDrivers << "명, "
+             << "픽업중: " << pickupDrivers << "명, "
+             << "배달중: " << deliveryDrivers << "명, "
+             << "미배차: " << pendingOrders.size() << "건" << endl;
     }
+
+    // 실제 이동 로그는 이동 시스템에서 처리됨 ([이동 X초] 로그)
 }
 
 string Simulator::generateRandomName(const string& prefix) {
@@ -949,9 +1058,22 @@ int Simulator::generateRandomCoordinate(int min, int max) {
 int Simulator::generateRandomOrderTime() {
     static random_device rd;
     static mt19937 gen(rd());
-    uniform_int_distribution<> dis(0, simulationTimeLimit - 60); // 시뮬레이션 시간에서 1분 전까지
 
-    return dis(gen);
+    // 10~20초 간격으로 랜덤 생성 (평균 15초)
+    uniform_int_distribution<> intervalDis(10, 20);
+    int interval = intervalDis(gen);
+
+    // 현재 nextOrderTime에 간격을 더해서 다음 주문 시간 생성
+    int currentOrderTime = nextOrderTime;
+    nextOrderTime += interval;
+
+    // 시뮬레이션 시간 제한을 초과하지 않도록 제한
+    if (currentOrderTime >= simulationTimeLimit - 30) { // 30초 여유 두기
+        // 시뮬레이션 시간을 초과하면 초기 시간대로 래핑
+        currentOrderTime = 5 + (currentOrderTime % 30);
+    }
+
+    return currentOrderTime;
 }
 
 void Simulator::listAll() {
