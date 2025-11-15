@@ -702,6 +702,86 @@ void Simulator::runRealTimeSimulation() {
         bool newOrderAdded = false;
         bool driverCompleted = false;
 
+        // 기사 상태 업데이트 (실제 위치 기반 픽업/배달 완료 처리) - 먼저 처리
+        for (auto& driverPair : driverStates) {
+            int driverId = driverPair.first;
+            int& state = driverPair.second;
+
+            if (state != 0) { // 이동 중인 기사들 체크
+                int orderId = driverCurrentOrder[driverId];
+                Order* order = nullptr;
+
+                // 현재 주문 찾기 (deliverySystem에서)
+                if (deliverySystem) {
+                    vector<Order*>& systemOrders = deliverySystem->getAllOrders();
+                    for (Order* o : systemOrders) {
+                        if (o->getOrderId() == orderId) {
+                            order = o;
+                            break;
+                        }
+                    }
+                }
+
+                if (order) {
+                    Location currentPos = driverLocations[driverId];
+                    Location targetPos;
+
+                    if (state == 1) { // 픽업 중 - 매장으로 이동
+                        targetPos = order->getStore()->getLocation();
+                    } else { // 배달 중 - 배달지로 이동
+                        targetPos = order->getDeliveryLocation();
+                    }
+
+                    // 목적지 도착 확인 (거리 1.0 이하면 도착으로 간주)
+                    double distanceToTarget = currentPos.calculateDistance(targetPos);
+
+                    if (distanceToTarget <= DRIVER_SPEED) {
+                        // 목적지 도착!
+                        driverLocations[driverId] = targetPos; // 정확한 목적지 위치로 설정
+
+                        if (state == 1) { // 픽업 완료
+                            state = 2; // 배달 중 상태로 변경
+                            order->completePickup();
+
+                            Location storeLocation = order->getStore()->getLocation();
+                            Location deliveryLoc = order->getDeliveryLocation();
+
+                            cout << "[시간: " << currentTime << "초] 기사 #" << driverId
+                                 << " 픽업 완료! 매장: (" << storeLocation.getX() << ", " << storeLocation.getY()
+                                 << ") → 배달지: (" << deliveryLoc.getX() << ", " << deliveryLoc.getY()
+                                 << ") 배달 시작! (주문 ID: " << orderId << ")" << endl;
+
+                        } else if (state == 2) { // 배달 완료
+                            state = 0; // 대기 상태로 변경
+                            driverCurrentOrder[driverId] = -1;
+
+                            // 완료된 주문 처리 (deliverySystem에서 찾기)
+                            if (deliverySystem) {
+                                vector<Order*>& systemOrders = deliverySystem->getAllOrders();
+                                for (auto it = systemOrders.begin(); it != systemOrders.end(); ++it) {
+                                    Order* o = *it;
+                                    if (o->getOrderId() == orderId) {
+                                        o->completeDelivery();
+                                        completedOrders.push_back(o);
+
+                                        cout << "[시간: " << currentTime << "초] 기사 #" << driverId
+                                             << " 배달 완료! 최종 위치: (" << targetPos.getX() << ", " << targetPos.getY()
+                                             << "), 배달비: " << (int)o->getDeliveryFee() << "원 (주문 ID: " << orderId << ")" << endl;
+
+                                        // 완료된 주문을 deliverySystem에서도 제거
+                                        systemOrders.erase(it);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            driverCompleted = true;
+                        }
+                    }
+                }
+            }
+        }
+
         // 새로운 주문 추가 (시간 제한 내에서만)
         while (currentTime < simulationTimeLimit &&
                static_cast<size_t>(orderIndex) < scheduledOrders.size() &&
@@ -786,81 +866,6 @@ void Simulator::runRealTimeSimulation() {
             }
         }
 
-        // 기사 상태 업데이트 (실제 위치 기반 픽업/배달 완료 처리)
-        for (auto& driverPair : driverStates) {
-            int driverId = driverPair.first;
-            int& state = driverPair.second;
-
-            if (state != 0) { // 이동 중인 기사들 체크
-                int orderId = driverCurrentOrder[driverId];
-                Order* order = nullptr;
-
-                // 현재 주문 찾기 (deliverySystem에서)
-                if (deliverySystem) {
-                    vector<Order*>& systemOrders = deliverySystem->getAllOrders();
-                    for (Order* o : systemOrders) {
-                        if (o->getOrderId() == orderId) {
-                            order = o;
-                            break;
-                        }
-                    }
-                }
-
-                if (order) {
-                    Location currentPos = driverLocations[driverId];
-                    Location targetPos;
-
-                    if (state == 1) { // 픽업 중 - 매장으로 이동
-                        targetPos = order->getStore()->getLocation();
-                    } else { // 배달 중 - 배달지로 이동
-                        targetPos = order->getDeliveryLocation();
-                    }
-
-                    // 목적지 도착 확인 (거리 1.0 이하면 도착으로 간주)
-                    double distanceToTarget = currentPos.calculateDistance(targetPos);
-
-                    if (distanceToTarget <= DRIVER_SPEED) {
-                        // 목적지 도착!
-                        driverLocations[driverId] = targetPos; // 정확한 목적지 위치로 설정
-
-                        if (state == 1) { // 픽업 완료
-                            state = 2; // 배달 중 상태로 변경
-                            order->completePickup();
-
-                            Location storeLocation = order->getStore()->getLocation();
-                            Location deliveryLoc = order->getDeliveryLocation();
-
-                            cout << "[시간: " << currentTime << "초] 기사 #" << driverId
-                                 << " 픽업 완료! 매장: (" << storeLocation.getX() << ", " << storeLocation.getY()
-                                 << ") → 배달지: (" << deliveryLoc.getX() << ", " << deliveryLoc.getY()
-                                 << ") 배달 시작! (주문 ID: " << orderId << ")" << endl;
-
-                        } else if (state == 2) { // 배달 완료
-                            state = 0; // 대기 상태로 변경
-                            driverCurrentOrder[driverId] = -1;
-
-                            // 완료된 주문 처리 (deliverySystem에서 찾기)
-                            if (deliverySystem) {
-                                vector<Order*>& systemOrders = deliverySystem->getAllOrders();
-                                for (Order* o : systemOrders) {
-                                    if (o->getOrderId() == orderId) {
-                                        o->completeDelivery();
-                                        completedOrders.push_back(o);
-
-                                        cout << "[시간: " << currentTime << "초] 기사 #" << driverId
-                                             << " 배달 완료! 최종 위치: (" << targetPos.getX() << ", " << targetPos.getY()
-                                             << "), 배달비: " << (int)o->getDeliveryFee() << "원 (주문 ID: " << orderId << ")" << endl;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            driverCompleted = true;
-                        }
-                    }
-                }
-            }
-        }
 
         // 배차 처리 조건 확인
         bool shouldCallDispatch = false;
