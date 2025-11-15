@@ -778,6 +778,17 @@ void Simulator::runRealTimeSimulation() {
                             driverCompleted = true;
                         }
                     }
+                } else {
+                    // 유효하지 않은 주문 참조 처리 - 주문이 이미 완료되어 제거된 경우
+                    cout << "[경고 " << currentTime << "초] 기사 #" << driverId
+                         << " 참조하던 주문 ID: " << orderId << "가 존재하지 않음 (이미 완료됨). 기사 상태 초기화." << endl;
+
+                    // 기사 상태를 대기 상태로 초기화
+                    state = 0; // 대기 상태로 변경
+                    driverCurrentOrder[driverId] = -1; // 주문 참조 해제
+
+                    // 기사를 즉시 새로운 배차 대상으로 만들기 위해 완료 플래그 설정
+                    driverCompleted = true;
                 }
             }
         }
@@ -862,6 +873,17 @@ void Simulator::runRealTimeSimulation() {
                              << "), 남은 거리: " << fixed << setprecision(1)
                              << driverLocations[driverId].calculateDistance(targetPos) << endl;
                     }
+                } else {
+                    // 유효하지 않은 주문 참조 처리 - 주문이 이미 완료되어 제거된 경우
+                    cout << "[경고 " << currentTime << "초] 기사 #" << driverId
+                         << " 이동 중 참조하던 주문 ID: " << orderId << "가 존재하지 않음. 기사 상태 초기화." << endl;
+
+                    // 기사 상태를 대기 상태로 초기화
+                    driverStates[driverId] = 0; // 대기 상태로 변경
+                    driverCurrentOrder[driverId] = -1; // 주문 참조 해제
+
+                    // 기사를 즉시 새로운 배차 대상으로 만들기 위해 완료 플래그 설정
+                    driverCompleted = true;
                 }
             }
         }
@@ -883,13 +905,30 @@ void Simulator::runRealTimeSimulation() {
             deliverySystem->acceptCall();
             lastDispatchTime = currentTime;
 
-            // 새로 할당된 주문들 처리
+            // 새로 할당된 주문들 처리 - 중복 배차 방지
             vector<Order*>& systemOrders = deliverySystem->getAllOrders();
             for (Order* order : systemOrders) {
                 if (order->getDriverId() != -1 && driverStates[order->getDriverId()] == 0) {
                     int driverId = order->getDriverId();
+                    int orderId = order->getOrderId();
+
+                    // 중복 배차 방지: 이미 다른 기사가 담당 중인 주문인지 확인
+                    bool orderAlreadyAssigned = false;
+                    for (const auto& driverOrderPair : driverCurrentOrder) {
+                        if (driverOrderPair.second == orderId && driverOrderPair.first != driverId) {
+                            orderAlreadyAssigned = true;
+                            cout << "[경고 " << currentTime << "초] 주문 ID: " << orderId
+                                 << " 중복 배차 차단! (기사 #" << driverOrderPair.first << "가 이미 담당 중)" << endl;
+                            break;
+                        }
+                    }
+
+                    if (orderAlreadyAssigned) {
+                        continue; // 이미 할당된 주문은 건너뛰기
+                    }
+
                     driverStates[driverId] = 1; // 픽업 중 상태
-                    driverCurrentOrder[driverId] = order->getOrderId();
+                    driverCurrentOrder[driverId] = orderId;
 
                     // 실제 이동 기반 시스템 - driverAvailableTime 사용하지 않음
                     Location storeLocation = order->getStore()->getLocation();
@@ -899,11 +938,11 @@ void Simulator::runRealTimeSimulation() {
                          << " 배차 수락! 현재위치: (" << driverLocations[driverId].getX() << ", " << driverLocations[driverId].getY()
                          << ") → 매장: (" << storeLocation.getX() << ", " << storeLocation.getY()
                          << "), 거리: " << fixed << setprecision(1) << pickupDistance
-                         << ", 속도: " << DRIVER_SPEED << "/초 (주문 ID: " << order->getOrderId() << ")" << endl;
+                         << ", 속도: " << DRIVER_SPEED << "/초 (주문 ID: " << orderId << ")" << endl;
 
                     // 할당된 주문을 pendingOrders에서 제거
                     for (auto it = pendingOrders.begin(); it != pendingOrders.end(); ++it) {
-                        if ((*it)->getOrderId() == order->getOrderId()) {
+                        if ((*it)->getOrderId() == orderId) {
                             pendingOrders.erase(it);
                             break;
                         }
