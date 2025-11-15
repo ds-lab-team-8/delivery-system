@@ -106,7 +106,8 @@ private:
 
     // 시뮬레이션 상태 출력 메서드 (나중에 visualize()로 교체 예정)
     void printSimulationStatus(int currentTime, const map<int, Location>& driverLocations,
-                              const map<int, int>& driverStates, const vector<Order*>& pendingOrders);
+                              const map<int, int>& driverStates, const vector<Order*>& pendingOrders,
+                              const vector<Order*>& completedOrders);
 
     // 유틸리티 메서드
     string generateRandomName(const string& prefix);

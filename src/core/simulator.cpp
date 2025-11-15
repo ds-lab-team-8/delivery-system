@@ -694,16 +694,17 @@ void Simulator::runRealTimeSimulation() {
     cout << "[시간: 0초] 시뮬레이션 시작" << endl;
 
     // 메인 시뮬레이션 루프
-    while (currentTime < simulationTimeLimit &&
-           (static_cast<size_t>(orderIndex) < scheduledOrders.size() || !pendingOrders.empty() ||
-            any_of(driverStates.begin(), driverStates.end(),
-                   [](const pair<int, int>& p) { return p.second != 0; }))) {
+    while (!pendingOrders.empty() ||
+           any_of(driverStates.begin(), driverStates.end(),
+                  [](const pair<int, int>& p) { return p.second != 0; }) ||
+           (currentTime < simulationTimeLimit && static_cast<size_t>(orderIndex) < scheduledOrders.size())) {
 
         bool newOrderAdded = false;
         bool driverCompleted = false;
 
-        // 새로운 주문 추가
-        while (static_cast<size_t>(orderIndex) < scheduledOrders.size() &&
+        // 새로운 주문 추가 (시간 제한 내에서만)
+        while (currentTime < simulationTimeLimit &&
+               static_cast<size_t>(orderIndex) < scheduledOrders.size() &&
                scheduledOrders[orderIndex].orderTime <= currentTime) {
             Order* newOrder = scheduledOrders[orderIndex].order;
             pendingOrders.push_back(newOrder);
@@ -838,18 +839,19 @@ void Simulator::runRealTimeSimulation() {
                             state = 0; // 대기 상태로 변경
                             driverCurrentOrder[driverId] = -1;
 
-                            // 완료된 주문 처리
-                            for (auto it = pendingOrders.begin(); it != pendingOrders.end(); ++it) {
-                                if ((*it)->getOrderId() == orderId) {
-                                    (*it)->completeDelivery();
-                                    completedOrders.push_back(*it);
+                            // 완료된 주문 처리 (deliverySystem에서 찾기)
+                            if (deliverySystem) {
+                                vector<Order*>& systemOrders = deliverySystem->getAllOrders();
+                                for (Order* o : systemOrders) {
+                                    if (o->getOrderId() == orderId) {
+                                        o->completeDelivery();
+                                        completedOrders.push_back(o);
 
-                                    cout << "[시간: " << currentTime << "초] 기사 #" << driverId
-                                         << " 배달 완료! 최종 위치: (" << targetPos.getX() << ", " << targetPos.getY()
-                                         << "), 배달비: " << (int)(*it)->getDeliveryFee() << "원 (주문 ID: " << orderId << ")" << endl;
-
-                                    pendingOrders.erase(it);
-                                    break;
+                                        cout << "[시간: " << currentTime << "초] 기사 #" << driverId
+                                             << " 배달 완료! 최종 위치: (" << targetPos.getX() << ", " << targetPos.getY()
+                                             << "), 배달비: " << (int)o->getDeliveryFee() << "원 (주문 ID: " << orderId << ")" << endl;
+                                        break;
+                                    }
                                 }
                             }
 
@@ -906,7 +908,7 @@ void Simulator::runRealTimeSimulation() {
         }
 
         // 현재 상태 출력 (매초마다)
-        printSimulationStatus(currentTime, driverLocations, driverStates, pendingOrders);
+        printSimulationStatus(currentTime, driverLocations, driverStates, pendingOrders, completedOrders);
 
         // 1초 대기 (실제 시간)
         this_thread::sleep_for(chrono::seconds(1));
@@ -1016,7 +1018,8 @@ void Simulator::printHelp() {
 }
 
 void Simulator::printSimulationStatus(int currentTime, const map<int, Location>& driverLocations,
-                                      const map<int, int>& driverStates, const vector<Order*>& pendingOrders) {
+                                      const map<int, int>& driverStates, const vector<Order*>& pendingOrders,
+                                      const vector<Order*>& completedOrders) {
     // 매 10초마다 요약 상태 출력
     if (currentTime % 10 == 0) {
         cout << "[상태 " << currentTime << "초] ";
@@ -1033,7 +1036,8 @@ void Simulator::printSimulationStatus(int currentTime, const map<int, Location>&
         cout << "대기: " << waitingDrivers << "명, "
              << "픽업중: " << pickupDrivers << "명, "
              << "배달중: " << deliveryDrivers << "명, "
-             << "미배차: " << pendingOrders.size() << "건" << endl;
+             << "미배차: " << pendingOrders.size() << "건, "
+             << "완료: " << completedOrders.size() << "건" << endl;
     }
 
     // 실제 이동 로그는 이동 시스템에서 처리됨 ([이동 X초] 로그)
