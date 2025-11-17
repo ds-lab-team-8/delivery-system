@@ -28,10 +28,15 @@ public:
 	void statusUpdate();          // 주문 상태 업데이트용 메서드 (픽업 완료, 배달 완료 시점 업데이트용)
     void completePickup(int orderId);   // 특정 주문을 픽업 완료 (주문 상태 변경)
     void completeDelivery(int orderId);   // 특정 주문을 배달 완료 (주문 상태 변경)
+
+    // 주문을 시스템 레벨에서 기사에게 원자적으로 할당하는 API
+    bool assignOrderToDriver(Order* order, Driver& driver);
     
     // 시뮬레이터를 위한 조회 메서드
     vector<Order*>& getAllOrders() { return orders; }
     void initializeMap();
+	void setLimitOrderReceive(int limit);   //driver가 한번에 받을수있는 최대 주문수 설정(최솟값 1,최댓값 3)
+	int getLimitOrderReceive() const { return limitOrderReceive; }  //driver가 한번에 받을수있는 최대 주문수 반환
 
 protected:
 	// getters
@@ -47,6 +52,7 @@ private:
     vector<Driver> drivers;
     vector<Store> stores;
     vector<Order*> orders;
+	int limitOrderReceive = 1; //driver가 한번에 받을수있는 최대 주문수(기본값 1)
 };
 
 

@@ -80,6 +80,16 @@ void DeliverySystem::requestCallsToDrivers() {
     }
 }
 */
+
+bool DeliverySystem::assignOrderToDriver(Order* order, Driver& driver) {        // 중앙에서 주문을 기사에게 원자적으로 할당하는 메서드
+    if (!order) return false;
+    if (order->getStatus() != ORDER_ACCEPTED) return false;
+
+    order->assignDriver(driver.getId());
+    driver.addOrder(order);
+    return true;
+}
+
 void DeliverySystem::acceptCall() {                                             // 특정 주문에 대해 배차 요청 수락
     // DeliverySystem_drivercall 인지 DeliverySystem_systemselection 인지에 따라 변동될 메서드
     // 오버라이드해 구현해두었음(DeliverySystem_drivercall에서는 orderid를 사용하지 않음)
@@ -167,7 +177,13 @@ void DeliverySystem::statusUpdate() {                                           
             driverLoc.getX() == ordererLoc.getX() && driverLoc.getY() == ordererLoc.getY()) {
             order->completeDelivery();
             driverIt->completeDelivery(order->getOrderId());
+			driverIt->addEarnings(order->getDeliveryFee());                         // 배달 완료 시 배달비 추가
         }
     }
 }
 
+void DeliverySystem::setLimitOrderReceive(int limit) {
+    if (limit < 1) limit = 1;
+	else if (limit > 3) limit = 3;
+    limitOrderReceive = limit;
+}

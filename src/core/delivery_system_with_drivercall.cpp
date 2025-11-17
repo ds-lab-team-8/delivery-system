@@ -3,73 +3,122 @@
 #include <vector>
 #include <utility>
 #include <algorithm>
+#include <numeric>
 #include "delivery_system_with_drivercall.h"
 
 using namespace std;
 
-DeliverySystemWithDriverCall::DeliverySystemWithDriverCall() : DeliverySystem() {}                  // �θ� ������ ȣ��
+DeliverySystemWithDriverCall::DeliverySystemWithDriverCall() : DeliverySystem() {}
 
-DeliverySystemWithDriverCall::~DeliverySystemWithDriverCall() = default;                            // �θ� �Ҹ��� ȣ��
+DeliverySystemWithDriverCall::~DeliverySystemWithDriverCall() = default;
+
+vector<vector<Order*>> DeliverySystemWithDriverCall::generateOrderCombos(const vector<Order*>& availableOrders, int maxComboSize = 3) {
+    vector<vector<Order*>> combos;
+    int n = availableOrders.size();
+    int maxSize = min(maxComboSize, n);
+    
+    for (int size = 1; size <= maxSize; ++size) {
+        vector<int> indices(size);
+        iota(indices.begin(), indices.end(), 0);
+        do {
+            vector<Order*> combo;
+            for (int index : indices) {
+                combo.push_back(availableOrders[index]);
+            }
+            combos.push_back(combo);
+		} while (next_combination(indices.begin(), indices.end(), n));
+    }
+    return combos;
+}
+
+double DeliverySystemWithDriverCall::bestDistanceForOrderCombo(const vector<Order*>& orderCombo, const Driver& driver, const Map& map) {
+    struct Node {
+        int orderId;
+        bool isPickup;
+        int node;
+        bool operator<(const Node& other) const {
+            if (orderId != other.orderId) return orderId < other.orderId;
+            return (isPickup && !other.isPickup);
+        }
+    };
+
+    vector<Node> nodes;
+    for (Order* order : orderCombo) {
+        nodes.push_back({ order->getOrderId(), true,  order->getStore()->getLocation().getNode() });
+        nodes.push_back({ order->getOrderId(), false, order->getOrderer()->getLocation().getNode() });
+    }
+
+    sort(nodes.begin(), nodes.end());
+
+    double bestDist = numeric_limits<double>::max();
+
+    do {
+        bool valid = true;
+        set<int> picked;
+        for (auto& n : nodes) {
+            if (n.isPickup) picked.insert(n.orderId);
+            else if (!picked.count(n.orderId)) { valid = false; break; }
+        }
+        if (!valid) continue;
+
+        double distSum = 0;
+        int cur = driver.getCurrentLocation().getNode();
+        for (auto& n : nodes) {
+            distSum += map.GetMap_cost(cur, n.node);
+            cur = n.node;
+        }
+        bestDist = min(bestDist, distSum);
+
+    } while (next_permutation(nodes.begin(), nodes.end()));
+
+    return bestDist;
+}
+
+double DeliverySystemWithDriverCall::computeEfficiency(const vector<Order*>& group, double totalDist) {
+    double totalFee = 0;
+    for (Order* order : group) {
+        totalFee += order->getDeliveryFee();
+    }
+    return totalFee / totalDist;
+}
 
 void DeliverySystemWithDriverCall::acceptCall() {
-    set<int> assignedOrderIds;
-
+    Map& map = getMap();
     vector<Driver>& drivers = getDrivers();
-	vector<Order*>& orders = getOrders();
-	vector<Store>& stores = getStores();
-	vector<Orderer>& orderers = getOrderers();
-	Map& map = getMap();
-
-    if (map.map_cost == nullptr) {
-        return;
-    }
+    vector<Order*>& orders = getOrders();
+    int limitOrderReceive = getLimitOrderReceive();
+    set<int> assignedOrderIds;
 
     for (Driver& driver : drivers) {
         if (!driver.isAvailable()) continue;
-        
-        using OrderDist = pair<double, Order*>;
-        priority_queue<OrderDist, vector<OrderDist>, greater<OrderDist>> orderHeap;
+        vector<Order*> availableOrders;
 
         for (Order* order : orders) {
-            if (assignedOrderIds.count(order->getOrderId()) == 0 &&
-                order->getStatus() == ORDER_ACCEPTED)
-            {
-                const Store* orderStore = order->getStore();
-                const Orderer* orderOrderer = order->getOrderer();
-                
-                if (!orderStore || !orderOrderer) continue;
-                
-                const Location& storeLoc = orderStore->getLocation();
-                const Location& ordererLoc = orderOrderer->getLocation();
-                const Location& driverLoc = driver.getCurrentLocation();
-
-                if (storeLoc.getNode() == -1 || ordererLoc.getNode() == -1 || driverLoc.getNode() == -1) {
-                    continue;
-                }
-                
-                if (storeLoc.getNode() >= (int)map.nodes.size() || ordererLoc.getNode() >= (int)map.nodes.size() || 
-                    driverLoc.getNode() >= (int)map.nodes.size()) {
-                    continue;
-                }
-
-                double distToStore = map.GetMap_cost(driverLoc.getNode(), storeLoc.getNode());
-                double distToOrderer = map.GetMap_cost(storeLoc.getNode(), ordererLoc.getNode());
-                double totalDist = distToStore + distToOrderer;
-
-                orderHeap.push({ totalDist, order });
+            if (order->getStatus() == ORDER_ACCEPTED && !assignedOrderIds.count(order->getOrderId())) {
+                availableOrders.push_back(order);
             }
         }
 
-        while (!orderHeap.empty()) {
-            Order* bestOrder = orderHeap.top().second;
-            orderHeap.pop();
+        if (availableOrders.empty()) continue;
 
-            if (assignedOrderIds.count(bestOrder->getOrderId()) == 0) {
-                driver.addOrder(bestOrder);
-                bestOrder->assignDriver(driver.getId());
-                bestOrder->acceptOrder();
-                assignedOrderIds.insert(bestOrder->getOrderId());
-                break;
+        vector<vector<Order*>> orderCombos = generateOrderCombos(availableOrders, limitOrderReceive);
+        double bestEfficiency = -1.0;
+        vector<Order*> bestGroup;
+        for (const auto& group : orderCombos) {
+            double bestDist = bestDistanceForOrderCombo(group, driver, map);
+            double efficiency = computeEfficiency(group, bestDist);
+            if (efficiency > bestEfficiency) {
+                bestEfficiency = efficiency;
+                bestGroup = group;
+            }
+        }
+
+        for (Order* order : bestGroup) {
+            if (assignedOrderIds.count(order->getOrderId())) continue;
+            if (order->getStatus() != ORDER_ACCEPTED) continue;
+
+            if (assignOrderToDriver(order, driver)) {
+                assignedOrderIds.insert(order->getOrderId());
             }
         }
     }
