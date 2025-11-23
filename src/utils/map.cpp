@@ -120,7 +120,7 @@ int Map::GetMap_pos(int crt, int trg) {
     return map_pos[trg][crt];
 }
 
-double Map::GetMap_cost(int crt,int trg){
+double Map::GetMap_cost(int crt,int trg) const {
     return map_cost[trg][crt];
 }
 
@@ -173,4 +173,5 @@ Location  Map::find_route(const Location& crt, const Location& trg) {
     }
 
     return nodes[result];
+
 }
