@@ -1,4 +1,5 @@
 #include "map.h"
+#include <climits>
 
 using namespace std;
 
@@ -105,7 +106,7 @@ void Map::SetMap(int** arr) {
             map_cost[j][i] = temp[i];
         }
 
-        delete temp;
+        delete[] temp;
     }
 
 
@@ -151,7 +152,7 @@ void Map::loop_cost(vector<int> check, double* temp, int node) {  //map_cost를 
         }
     }
 
-    delete crr;
+    delete[] crr;
 }
 
 Location  Map::find_route(const Location& crt, const Location& trg) {
@@ -175,3 +176,4 @@ Location  Map::find_route(const Location& crt, const Location& trg) {
     return nodes[result];
 
 }
+
