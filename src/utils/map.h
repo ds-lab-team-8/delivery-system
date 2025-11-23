@@ -55,7 +55,7 @@ public:
     //반대로 arr[3][1]=1 이면 items[1] 에서 items[3]로 가는 길은 있다는 의미 이다.
     void SetMap(int** arr);
     int GetMap_pos(int crt, int trg); //currentPos 에서 targetPos까지의 직접적인 거리. 길이없으면 -1 반환
-    double GetMap_cost(int crt,int trg);
+    double GetMap_cost(int crt,int trg) const;
 
     Location find_route(const Location& crt, const Location& trg); //crt에 위치했을때 trg로 가려면 어느 노드로 가야하는지 반환
 
@@ -72,5 +72,6 @@ private:
     
     void loop_cost(vector<int> check, double* temp, int node);// 그래프 표현: 인접 리스트
 };
+
 
 #endif
