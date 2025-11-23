@@ -20,13 +20,19 @@ vector<vector<Order*>> DeliverySystemWithDriverCall::generateOrderCombos(const v
     for (int size = 1; size <= maxSize; ++size) {
         vector<int> indices(size);
         iota(indices.begin(), indices.end(), 0);
-        do {
+        
+        while (true) {
             vector<Order*> combo;
-            for (int index : indices) {
-                combo.push_back(availableOrders[index]);
-            }
+            combo.reserve(size);
+            for (int idx : indices) combo.push_back(availableOrders[idx]);
             combos.push_back(combo);
-		} while (next_combination(indices.begin(), indices.end(), n));
+
+            int i = size - 1;
+            while (i >= 0 && indices[i] == i + n - size) --i;
+            if (i < 0) break;
+            ++indices[i];
+            for (int j = i + 1; j < size; ++j) indices[j] = indices[j - 1] + 1;
+        }
     }
     return combos;
 }
@@ -124,3 +130,4 @@ void DeliverySystemWithDriverCall::acceptCall() {
     }
 
 }
+
