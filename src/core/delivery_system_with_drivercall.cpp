@@ -12,7 +12,7 @@ DeliverySystemWithDriverCall::DeliverySystemWithDriverCall() : DeliverySystem() 
 
 DeliverySystemWithDriverCall::~DeliverySystemWithDriverCall() = default;
 
-vector<vector<Order*>> DeliverySystemWithDriverCall::generateOrderCombos(const vector<Order*>& availableOrders, int maxComboSize = 3) {
+vector<vector<Order*>> DeliverySystemWithDriverCall::generateOrderCombos(const vector<Order*>& availableOrders, int maxComboSize) {
     vector<vector<Order*>> combos;
     int n = availableOrders.size();
     int maxSize = min(maxComboSize, n);
@@ -122,4 +122,5 @@ void DeliverySystemWithDriverCall::acceptCall() {
             }
         }
     }
+
 }
