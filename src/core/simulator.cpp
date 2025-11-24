@@ -99,6 +99,7 @@ Simulator::Simulator() : deliverySystem(nullptr),
                          dispatchStrategy(nullptr),
                          systemType(DRIVER_CALL),
                          simulationTimeLimit(DEFAULT_SIMULATION_TIME),
+                         visualizeMode(true),
                          nextOrdererId(1), nextDriverId(1),
                          nextStoreId(1), nextOrderId(1) {
     // 기본값으로 DRIVER_CALL 시스템 초기화
@@ -623,6 +624,22 @@ void Simulator::simulateWithUserInput() {
             cout << "시뮬레이터를 종료합니다." << endl;
             running = false;
 
+        } else if (cmd == "set_visualize") {
+            string mode;
+            iss >> mode;
+
+            if (mode.empty()) {
+                cout << "[출력 모드] 현재 모드: " << (visualizeMode ? "시각화 모드" : "텍스트 로그 모드") << endl;
+            } else if (mode == "on") {
+                visualizeMode = true;
+                cout << "[출력 모드 변경] 시각화 모드로 설정되었습니다." << endl;
+            } else if (mode == "off") {
+                visualizeMode = false;
+                cout << "[출력 모드 변경] 텍스트 로그 모드로 설정되었습니다." << endl;
+            } else {
+                cout << "잘못된 모드입니다. (on 또는 off를 입력하세요)" << endl;
+            }
+
         } else if (cmd == "help") {
             printHelp();
 
@@ -670,6 +687,7 @@ void Simulator::runRealTimeSimulation() {
     map<int, int> driverStates; // 0: 대기, 1: 픽업중, 2: 배달중
     map<int, double> driverAvailableTime;
     map<int, int> driverCurrentOrder;
+    map<int, vector<int>> driverOrderList; // 기사별 현재 처리 중인 주문 ID 리스트
     vector<Order*> pendingOrders;
     vector<Order*> completedOrders;
 
@@ -682,6 +700,7 @@ void Simulator::runRealTimeSimulation() {
         driverStates[driver.getId()] = 0; // 대기 상태
         driverAvailableTime[driver.getId()] = 0.0;
         driverCurrentOrder[driver.getId()] = -1;
+        driverOrderList[driver.getId()] = vector<int>(); // 빈 주문 리스트로 초기화
     }
 
     // 배달 시스템 초기화
@@ -759,8 +778,22 @@ void Simulator::runRealTimeSimulation() {
                                  << ") 배달 시작! (주문 ID: " << orderId << ")" << endl;
 
                         } else if (state == 2) { // 배달 완료
-                            state = 0; // 대기 상태로 변경
-                            driverCurrentOrder[driverId] = -1;
+                            // driverOrderList에서 완료된 주문 제거
+                            vector<int>& driverOrders = driverOrderList[driverId];
+                            auto orderIt = find(driverOrders.begin(), driverOrders.end(), orderId);
+                            if (orderIt != driverOrders.end()) {
+                                driverOrders.erase(orderIt);
+                            }
+
+                            // 다음 주문이 있으면 계속 처리, 없으면 대기 상태로 변경
+                            if (!driverOrders.empty()) {
+                                // 다음 주문으로 이동
+                                driverCurrentOrder[driverId] = driverOrders[0];
+                                state = 1; // 픽업 중 상태로 변경 (다음 주문 픽업을 위해)
+                            } else {
+                                state = 0; // 대기 상태로 변경
+                                driverCurrentOrder[driverId] = -1;
+                            }
 
                             // 완료된 주문 처리 (deliverySystem에서 찾기)
                             if (deliverySystem) {
@@ -775,8 +808,8 @@ void Simulator::runRealTimeSimulation() {
                                              << " 배달 완료! 최종 위치: (" << targetPos.getX() << ", " << targetPos.getY()
                                              << "), 배달비: " << (int)o->getDeliveryFee() << "원 (주문 ID: " << orderId << ")" << endl;
 
-                                        // 완료된 주문을 deliverySystem에서도 제거
-                                        systemOrders.erase(it);
+                                        // 완료된 주문은 제거하지 않고 상태만 변경 (배달 완료 상태 유지)
+                                        // systemOrders.erase(it); // 제거하지 않음
                                         break;
                                     }
                                 }
@@ -912,30 +945,55 @@ void Simulator::runRealTimeSimulation() {
             deliverySystem->acceptCall();
             lastDispatchTime = currentTime;
 
-            // 새로 할당된 주문들 처리 - 중복 배차 방지
+            // 새로 할당된 주문들 처리 - 중복 배차 방지 및 다중 주문 지원
             vector<Order*>& systemOrders = deliverySystem->getAllOrders();
             for (Order* order : systemOrders) {
-                if (order->getDriverId() != -1 && driverStates[order->getDriverId()] == 0) {
+                // 배달 완료된 주문은 건너뛰기
+                if (order->isDeliveryCompleted()) {
+                    continue;
+                }
+
+                // 배차된 주문이지만 아직 시뮬레이터에서 처리되지 않은 경우
+                if (order->getDriverId() != -1) {
                     int driverId = order->getDriverId();
                     int orderId = order->getOrderId();
 
-                    // 중복 배차 방지: 이미 다른 기사가 담당 중인 주문인지 확인
-                    bool orderAlreadyAssigned = false;
-                    for (const auto& driverOrderPair : driverCurrentOrder) {
-                        if (driverOrderPair.second == orderId && driverOrderPair.first != driverId) {
-                            orderAlreadyAssigned = true;
-                            cout << "[경고 " << currentTime << "초] 주문 ID: " << orderId
-                                 << " 중복 배차 차단! (기사 #" << driverOrderPair.first << "가 이미 담당 중)" << endl;
-                            break;
+                    // 현재 기사가 처리할 수 있는 주문 개수 확인
+                    int currentOrderCount = driverOrderList[driverId].size();
+                    int limitReceive = deliverySystem->getLimitOrderReceive();
+
+                    if (currentOrderCount < limitReceive) {
+
+                        // 중복 배차 방지: 이미 다른 기사가 담당 중인 주문인지 확인
+                        bool orderAlreadyAssigned = false;
+                        for (const auto& driverListPair : driverOrderList) {
+                            if (driverListPair.first != driverId) {
+                                const vector<int>& orderList = driverListPair.second;
+                                if (find(orderList.begin(), orderList.end(), orderId) != orderList.end()) {
+                                    orderAlreadyAssigned = true;
+                                    cout << "[경고 " << currentTime << "초] 주문 ID: " << orderId
+                                         << " 중복 배차 차단! (기사 #" << driverListPair.first << "가 이미 담당 중)" << endl;
+                                    break;
+                                }
+                            }
                         }
-                    }
 
-                    if (orderAlreadyAssigned) {
-                        continue; // 이미 할당된 주문은 건너뛰기
-                    }
+                        // 현재 기사가 이미 이 주문을 처리 중인지 확인
+                        const vector<int>& currentDriverOrders = driverOrderList[driverId];
+                        bool alreadyProcessing = find(currentDriverOrders.begin(), currentDriverOrders.end(), orderId) != currentDriverOrders.end();
 
-                    driverStates[driverId] = 1; // 픽업 중 상태
-                    driverCurrentOrder[driverId] = orderId;
+                        if (orderAlreadyAssigned || alreadyProcessing) {
+                            continue; // 이미 할당된 주문은 건너뛰기
+                        }
+
+                        // 새로운 주문 할당
+                        driverOrderList[driverId].push_back(orderId);
+
+                        // 기사 상태 업데이트 (첫 번째 주문이면 픽업 중으로 변경)
+                        if (driverStates[driverId] == 0) {
+                            driverStates[driverId] = 1; // 픽업 중 상태
+                            driverCurrentOrder[driverId] = orderId; // 현재 처리 중인 주문 (첫 번째)
+                        }
 
                     // 실제 이동 기반 시스템 - driverAvailableTime 사용하지 않음
                     Location storeLocation = order->getStore()->getLocation();
@@ -947,19 +1005,44 @@ void Simulator::runRealTimeSimulation() {
                          << "), 거리: " << fixed << setprecision(1) << pickupDistance
                          << ", 속도: " << DRIVER_SPEED << "/초 (주문 ID: " << orderId << ")" << endl;
 
-                    // 할당된 주문을 pendingOrders에서 제거
-                    for (auto it = pendingOrders.begin(); it != pendingOrders.end(); ++it) {
-                        if ((*it)->getOrderId() == orderId) {
-                            pendingOrders.erase(it);
-                            break;
+                        // 할당된 주문을 pendingOrders에서 제거
+                        for (auto it = pendingOrders.begin(); it != pendingOrders.end(); ++it) {
+                            if ((*it)->getOrderId() == orderId) {
+                                pendingOrders.erase(it);
+                                break;
+                            }
                         }
-                    }
+                    } // if (currentOrderCount < limitReceive) 닫는 괄호
                 }
             }
         }
 
         // 현재 상태 출력 (매초마다)
-        printSimulationStatus(currentTime, driverLocations, driverStates, pendingOrders, completedOrders);
+        if (visualizeMode) {
+            // 시각화 모드: 콘솔 지우고 visualize() 함수 호출
+            system("clear"); // Linux/Mac용, Windows는 system("cls")
+            visualize(driverLocations, orderers, stores);
+
+            // 상태 정보도 같이 출력
+            int waitingDrivers = 0, pickupDrivers = 0, deliveryDrivers = 0;
+            for (const auto& pair : driverStates) {
+                switch (pair.second) {
+                    case 0: waitingDrivers++; break;
+                    case 1: pickupDrivers++; break;
+                    case 2: deliveryDrivers++; break;
+                }
+            }
+
+            cout << "\n[시간: " << currentTime << "초] ";
+            cout << "대기: " << waitingDrivers << "명, "
+                 << "픽업중: " << pickupDrivers << "명, "
+                 << "배달중: " << deliveryDrivers << "명, "
+                 << "미배차: " << pendingOrders.size() << "건, "
+                 << "완료: " << completedOrders.size() << "건" << endl;
+        } else {
+            // 텍스트 로그 모드: 기존 printSimulationStatus() 함수 사용
+            printSimulationStatus(currentTime, driverLocations, driverStates, pendingOrders, completedOrders);
+        }
 
         // 1초 대기 (실제 시간)
         this_thread::sleep_for(chrono::seconds(1));
@@ -1061,6 +1144,8 @@ void Simulator::printHelp() {
     cout << "    - 시뮬레이션 시간을 초 단위로 설정합니다. (기본값: 600초 = 10분)" << endl;
     cout << "  start (별칭: s)" << endl;
     cout << "    - 실시간 시뮬레이션을 시작합니다. (1초마다 진행 상황 출력)" << endl;
+    cout << "  set_visualize [on|off]" << endl;
+    cout << "    - 출력 모드를 설정합니다. on: 시각화 모드(기본값), off: 텍스트 로그 모드" << endl;
     cout << "  help" << endl;
     cout << "    - 도움말을 출력합니다." << endl;
     cout << "  quit / exit (별칭: q)" << endl;

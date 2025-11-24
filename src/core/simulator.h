@@ -73,6 +73,7 @@ private:
     static const double DRIVER_SPEED; // 기사 이동 속도 (거리 단위/초)
     static const int DEFAULT_SIMULATION_TIME; // 기본 시뮬레이션 시간 (초)
     int simulationTimeLimit; // 사용자 설정 시뮬레이션 시간 (초)
+    bool visualizeMode; // true: 시각화 모드, false: 텍스트 로그 모드
 
     // ID 자동 증가 카운터
     int nextOrdererId;
@@ -108,6 +109,11 @@ private:
     void printSimulationStatus(int currentTime, const map<int, Location>& driverLocations,
                               const map<int, int>& driverStates, const vector<Order*>& pendingOrders,
                               const vector<Order*>& completedOrders);
+
+    // 시각화 메서드
+    void visualize(const map<int, Location>& driverLocations,
+                   const vector<Orderer>& orderers,
+                   const vector<Store>& stores);
 
     // 유틸리티 메서드
     string generateRandomName(const string& prefix);
