@@ -14,6 +14,13 @@
 #include <chrono>
 #include <thread>
 
+#define MAP_SIZE 101    
+#define MAX_PRINT_COORD 80 
+#define EMPTY_SYMBOL '.'
+#define STORE_SYMBOL 'B'   // 매장
+#define DRIVER_SYMBOL '@'  // 배달 기사
+#define ORDER_DEST_SYMBOL 'H' // 도착지
+
 // 통계 데이터 구조체
 struct DriverStats {
     int deliveryCount;
@@ -1211,5 +1218,54 @@ void Simulator::listOrders() {
     printSeparator();
 }
 
+ void Simulator::visualize(const map<int, Location>& driverLocations,
+                             const vector<Orderer>& orderers,
+                             const vector<Store>& stores) {
+    
+    vector<vector<char>> mapGrid(MAP_SIZE, vector<char>(MAP_SIZE, EMPTY_SYMBOL));
+    
+    for (const Store& store : stores) {
+        int x = store.getLocation().getX();
+        int y = store.getLocation().getY();
+        if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
+            mapGrid[y][x] = STORE_SYMBOL;
+        }
+    }
+
+    for (const Orderer& orderer : orderers) {
+        int x = orderer.getLocation().getX();
+        int y = orderer.getLocation().getY();
+        if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
+            if (mapGrid[y][x] != STORE_SYMBOL) {
+                mapGrid[y][x] = ORDER_DEST_SYMBOL;
+            }
+        }
+    }
+    
+    for (const auto& pair : driverLocations) {
+        Location loc = pair.second;
+        int x = loc.getX();
+        int y = loc.getY();
+        if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
+            mapGrid[y][x] = DRIVER_SYMBOL;
+        }
+    }
+
+    cout << "\n============================== 맵 시각화 (0,0) ~ (" << MAP_SIZE-1 << "," << MAP_SIZE-1 << ") ==============================" << endl;
+    cout << "범례: " << DRIVER_SYMBOL << " 기사, " << STORE_SYMBOL << " 매장, " << ORDER_DEST_SYMBOL << " 주문자/도착지, " << EMPTY_SYMBOL << " 빈 공간" << endl;
+    
+    int print_size = min((int)MAP_SIZE, (int)MAX_PRINT_COORD);
+
+    for (int y = print_size - 1; y >= 0; --y) { 
+        
+        for (int x = 0; x < print_size; ++x) { 
+            cout << mapGrid[y][x] << " ";
+        }
+        if (MAP_SIZE > print_size) cout << "...";
+        cout << endl;
+    }
+    
+    cout << "==================================================================================" << endl;
+}
 
 
