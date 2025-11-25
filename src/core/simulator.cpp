@@ -1,4 +1,5 @@
 #include "simulator.h"
+#include "../entities/order.h"
 #include "delivery_system_with_drivercall.h"
 #include "delivery_system_with_systemselection.h"
 #include <sstream>
@@ -701,6 +702,7 @@ void Simulator::runRealTimeSimulation() {
         driverAvailableTime[driver.getId()] = 0.0;
         driverCurrentOrder[driver.getId()] = -1;
         driverOrderList[driver.getId()] = vector<int>(); // 빈 주문 리스트로 초기화
+
     }
 
     // 배달 시스템 초기화
@@ -718,6 +720,15 @@ void Simulator::runRealTimeSimulation() {
     }
 
     cout << "[시간: 0초] 시뮬레이션 시작" << endl;
+
+    auto removePendingOrder = [&](int orderId) {
+        for (auto it = pendingOrders.begin(); it != pendingOrders.end(); ++it) {
+            if ((*it)->getOrderId() == orderId) {
+                pendingOrders.erase(it);
+                break;
+            }
+        }
+    };
 
     // 메인 시뮬레이션 루프
     while (!pendingOrders.empty() ||
@@ -767,7 +778,12 @@ void Simulator::runRealTimeSimulation() {
 
                         if (state == 1) { // 픽업 완료
                             state = 2; // 배달 중 상태로 변경
-                            order->completePickup();
+
+                            if (deliverySystem) {
+                                deliverySystem->completePickup(orderId);
+                            } else {
+                                order->completePickup();
+                            }
 
                             Location storeLocation = order->getStore()->getLocation();
                             Location deliveryLoc = order->getDeliveryLocation();
@@ -795,25 +811,18 @@ void Simulator::runRealTimeSimulation() {
                                 driverCurrentOrder[driverId] = -1;
                             }
 
-                            // 완료된 주문 처리 (deliverySystem에서 찾기)
                             if (deliverySystem) {
-                                vector<Order*>& systemOrders = deliverySystem->getAllOrders();
-                                for (auto it = systemOrders.begin(); it != systemOrders.end(); ++it) {
-                                    Order* o = *it;
-                                    if (o->getOrderId() == orderId) {
-                                        o->completeDelivery();
-                                        completedOrders.push_back(o);
-
-                                        cout << "[시간: " << currentTime << "초] 기사 #" << driverId
-                                             << " 배달 완료! 최종 위치: (" << targetPos.getX() << ", " << targetPos.getY()
-                                             << "), 배달비: " << (int)o->getDeliveryFee() << "원 (주문 ID: " << orderId << ")" << endl;
-
-                                        // 완료된 주문은 제거하지 않고 상태만 변경 (배달 완료 상태 유지)
-                                        // systemOrders.erase(it); // 제거하지 않음
-                                        break;
-                                    }
-                                }
+                                deliverySystem->completeDelivery(orderId);
+                            } else {
+                                order->completeDelivery();
                             }
+
+                            completedOrders.push_back(order);
+                            removePendingOrder(orderId);
+
+                            cout << "[시간: " << currentTime << "초] 기사 #" << driverId
+                                 << " 배달 완료! 최종 위치: (" << targetPos.getX() << ", " << targetPos.getY()
+                                 << "), 배달비: " << (int)order->getDeliveryFee() << "원 (주문 ID: " << orderId << ")" << endl;
 
                             driverCompleted = true;
                         }
@@ -850,6 +859,14 @@ void Simulator::runRealTimeSimulation() {
             newOrderAdded = true;
             orderIndex++;
         }
+
+        // 완료되었거나 이미 배차된 주문은 pending 목록에서 정리
+        pendingOrders.erase(
+            remove_if(pendingOrders.begin(), pendingOrders.end(),
+                      [&](Order* order) {
+                          return (order->getDriverId() != -1) || order->isDeliveryCompleted();
+                      }),
+            pendingOrders.end());
 
         // 이동 중인 기사들의 실시간 위치 업데이트 (매초 점진적 이동)
         map<int, Location> driverTargets; // 기사별 목적지
@@ -930,14 +947,18 @@ void Simulator::runRealTimeSimulation() {
 
 
         // 배차 처리 조건 확인
+        bool hasIdleDriver = any_of(driverStates.begin(), driverStates.end(),
+                                    [](const pair<int, int>& status) { return status.second == 0; });
         bool shouldCallDispatch = false;
+        bool pendingAndIdle = false;
 
         if (systemType == SYSTEM_SELECTION) {
             // SystemSelection: 정기적으로 배차
             shouldCallDispatch = dispatchStrategy->shouldDispatch(currentTime, lastDispatchTime);
         } else if (systemType == DRIVER_CALL) {
             // DriverCall: 새 주문이나 기사 완료 시 배차
-            shouldCallDispatch = newOrderAdded || driverCompleted;
+            pendingAndIdle = !pendingOrders.empty() && hasIdleDriver;
+            shouldCallDispatch = newOrderAdded || driverCompleted || pendingAndIdle;
         }
 
         // 배차 처리
@@ -958,43 +979,37 @@ void Simulator::runRealTimeSimulation() {
                     int driverId = order->getDriverId();
                     int orderId = order->getOrderId();
 
-                    // 현재 기사가 처리할 수 있는 주문 개수 확인
-                    int currentOrderCount = driverOrderList[driverId].size();
-                    int limitReceive = deliverySystem->getLimitOrderReceive();
-
-                    if (currentOrderCount < limitReceive) {
-
-                        // 중복 배차 방지: 이미 다른 기사가 담당 중인 주문인지 확인
-                        bool orderAlreadyAssigned = false;
-                        for (const auto& driverListPair : driverOrderList) {
-                            if (driverListPair.first != driverId) {
-                                const vector<int>& orderList = driverListPair.second;
-                                if (find(orderList.begin(), orderList.end(), orderId) != orderList.end()) {
-                                    orderAlreadyAssigned = true;
-                                    cout << "[경고 " << currentTime << "초] 주문 ID: " << orderId
-                                         << " 중복 배차 차단! (기사 #" << driverListPair.first << "가 이미 담당 중)" << endl;
-                                    break;
-                                }
+                    // 현재 기사가 처리할 수 있는 주문 개수 확인 (제한은 DeliverySystem이 관리)
+                    // 중복 배차 방지: 이미 다른 기사가 담당 중인지 확인
+                    bool orderAlreadyAssigned = false;
+                    for (const auto& driverListPair : driverOrderList) {
+                        if (driverListPair.first != driverId) {
+                            const vector<int>& orderList = driverListPair.second;
+                            if (find(orderList.begin(), orderList.end(), orderId) != orderList.end()) {
+                                orderAlreadyAssigned = true;
+                                cout << "[경고 " << currentTime << "초] 주문 ID: " << orderId
+                                     << " 중복 배차 차단! (기사 #" << driverListPair.first << "가 이미 담당 중)" << endl;
+                                break;
                             }
                         }
+                    }
 
-                        // 현재 기사가 이미 이 주문을 처리 중인지 확인
-                        const vector<int>& currentDriverOrders = driverOrderList[driverId];
-                        bool alreadyProcessing = find(currentDriverOrders.begin(), currentDriverOrders.end(), orderId) != currentDriverOrders.end();
+                    // 현재 기사가 이미 이 주문을 처리 중인지 확인
+                    const vector<int>& currentDriverOrders = driverOrderList[driverId];
+                    bool alreadyProcessing = find(currentDriverOrders.begin(), currentDriverOrders.end(), orderId) != currentDriverOrders.end();
 
-                        if (orderAlreadyAssigned || alreadyProcessing) {
-                            continue; // 이미 할당된 주문은 건너뛰기
-                        }
+                    if (orderAlreadyAssigned || alreadyProcessing) {
+                        continue; // 이미 할당된 주문은 건너뛰기
+                    }
 
-                        // 새로운 주문 할당
-                        driverOrderList[driverId].push_back(orderId);
+                    // 새로운 주문 할당
+                    driverOrderList[driverId].push_back(orderId);
 
-                        // 기사 상태 업데이트 (첫 번째 주문이면 픽업 중으로 변경)
-                        if (driverStates[driverId] == 0) {
-                            driverStates[driverId] = 1; // 픽업 중 상태
-                            driverCurrentOrder[driverId] = orderId; // 현재 처리 중인 주문 (첫 번째)
-                        }
-
+                    // 기사 상태 업데이트 (첫 번째 주문이면 픽업 중으로 변경)
+                    if (driverStates[driverId] == 0) {
+                        driverStates[driverId] = 1; // 픽업 중 상태
+                        driverCurrentOrder[driverId] = orderId; // 현재 처리 중인 주문 (첫 번째)
+                    }
                     // 실제 이동 기반 시스템 - driverAvailableTime 사용하지 않음
                     Location storeLocation = order->getStore()->getLocation();
                     double pickupDistance = driverLocations[driverId].calculateDistance(storeLocation);
@@ -1005,14 +1020,8 @@ void Simulator::runRealTimeSimulation() {
                          << "), 거리: " << fixed << setprecision(1) << pickupDistance
                          << ", 속도: " << DRIVER_SPEED << "/초 (주문 ID: " << orderId << ")" << endl;
 
-                        // 할당된 주문을 pendingOrders에서 제거
-                        for (auto it = pendingOrders.begin(); it != pendingOrders.end(); ++it) {
-                            if ((*it)->getOrderId() == orderId) {
-                                pendingOrders.erase(it);
-                                break;
-                            }
-                        }
-                    } // if (currentOrderCount < limitReceive) 닫는 괄호
+                    // 할당된 주문을 pendingOrders에서 제거
+                    removePendingOrder(orderId);
                 }
             }
         }
