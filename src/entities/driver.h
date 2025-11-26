@@ -33,6 +33,10 @@ class Driver {
         void completeDelivery(int orderId);
         void addEarnings(double amount);
 
+        // 조회용 (Simulator가 DS 큐 순서를 조회할 때 사용 가능)
+        int getPendingOrderCount() const;
+        vector<int> getQueuedOrderIds() const;
+
     private:
         int id;
         string name;

@@ -1,77 +1,93 @@
 #include "driver.h"
 #include "order.h"
 #include "../core/delivery_system.h"
+#include <iostream>
 
 // Constructor
 Driver::Driver(int id_in, const string& name_in, const Location& initialLocation)
     :id(id_in),
     name(name_in),
     currentLocation(initialLocation),
-    available(true), // 초기화 -> 배달 가능 상태
-    totalEarnings(0.0) { 
-
+    available(true),
+    totalEarnings(0.0) {
 }
 
-// Destructor
-Driver::~Driver() {
-
-}
+Driver::~Driver() {}
 
 // Getters
-int Driver::getId() const {
-    return id;
-}
-
-string Driver::getName() const {
-    return name;
-}
-
-Location Driver::getCurrentLocation() const {
-    return currentLocation;
-}
-
-bool Driver::isAvailable() const {
-    return available;
-}
-
-double Driver::getTotalEarnings() const {
-    return totalEarnings;
-}
+int Driver::getId() const { return id; }
+string Driver::getName() const { return name; }
+Location Driver::getCurrentLocation() const { return currentLocation; }
+bool Driver::isAvailable() const { return available; }
+double Driver::getTotalEarnings() const { return totalEarnings; }
 
 // Location management
-void Driver::updateLocation(const Location& newLocation) {
-    currentLocation = newLocation;
-}
+void Driver::updateLocation(const Location& newLocation) { currentLocation = newLocation; }
+void Driver::setLocationNode(int node) { currentLocation.node = node; }
 
-void Driver::setLocationNode(int node) {
-    currentLocation.node = node;
-}
-
-// Order management methods
+// Order management
 void Driver::addOrder(Order* order) {
     orderQueue.push(order);
-    available = false; // -> 배달 불가능 상태로 변경
+    available = false;
 }
 
-void Driver::acceptOrder(int orderId, DeliverySystem* system) {
+void Driver::acceptOrder(int orderId, DeliverySystem* system) {}
 
-}
-
-// 수입이 추가 메서드
 void Driver::addEarnings(double amount) {
     totalEarnings += amount;
 }
 
-void Driver::completeDelivery(int orderId) { // 추가(수정)된 부분 : 수입 정산 로직 
-    if(!orderQueue.empty()) {
-        Order* completedOrder = orderQueue.front();
-        double fee = completedOrder->getDeliveryFee();
-        addEarnings(fee);
-        orderQueue.pop();
-        completedOrder->completeDelivery();
+int Driver::getPendingOrderCount() const {
+    return static_cast<int>(orderQueue.size());
+}
 
-        if (orderQueue.empty()) available = true;
+vector<int> Driver::getQueuedOrderIds() const {
+    vector<int> ids;
+    queue<Order*> tmp = orderQueue;
+    while (!tmp.empty()) {
+        ids.push_back(tmp.front()->getOrderId());
+        tmp.pop();
     }
-    
+    return ids;
+}
 
+void Driver::completeDelivery(int orderId) {
+    if (orderQueue.empty()) {
+        cerr << "[Warning] Driver::completeDelivery called but queue is empty (driver #" << id << ")." << endl;
+        available = true;
+        return;
+    }
+
+    Order* removedOrder = nullptr;
+
+    if (orderQueue.front()->getOrderId() == orderId) {
+        removedOrder = orderQueue.front();
+        orderQueue.pop();
+    } else {
+        queue<Order*> tmp;
+        bool found = false;
+        while (!orderQueue.empty()) {
+            Order* o = orderQueue.front();
+            orderQueue.pop();
+            if (!found && o->getOrderId() == orderId) {
+                removedOrder = o;
+                found = true;
+                continue;
+            }
+            tmp.push(o);
+        }
+        orderQueue = std::move(tmp);
+        if (!found) {
+            cerr << "[Error] Driver::completeDelivery: order id=" << orderId
+                 << " not found in driver #" << id << " queue. No pop performed." << endl;
+            available = orderQueue.empty();
+            return;
+        }
+    }
+
+    if (removedOrder) {
+        addEarnings(removedOrder->getDeliveryFee());
+    }
+
+    available = orderQueue.empty();
 }
