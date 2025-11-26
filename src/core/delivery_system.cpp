@@ -177,7 +177,6 @@ void DeliverySystem::statusUpdate() {                                           
             driverLoc.getX() == ordererLoc.getX() && driverLoc.getY() == ordererLoc.getY()) {
             order->completeDelivery();
             driverIt->completeDelivery(order->getOrderId());
-			driverIt->addEarnings(order->getDeliveryFee());                         // 배달 완료 시 배달비 추가
         }
     }
 }
