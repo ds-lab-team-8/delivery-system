@@ -240,8 +240,8 @@ void Simulator::simulateWithUserInput() {
                  << ", 위치: (" << x << ", " << y << "), 배달 단가: " << (int)feePerDistance << "원/거리" << endl;
 
         } else if (cmd == "add_order") {
-            int ordererId, storeId, x, y, orderTime = -1;
-            iss >> ordererId >> storeId >> x >> y;
+            int ordererId, storeId, orderTime = -1;
+            iss >> ordererId >> storeId;
 
             // 주문 시간이 주어진 경우
             if (iss >> orderTime) {
@@ -251,16 +251,22 @@ void Simulator::simulateWithUserInput() {
                 orderTime = generateRandomOrderTime();
             }
 
-            int orderId = nextOrderId++;
-            Location deliveryLoc(x, y);
-            Order* order = new Order(orderId, ordererId, storeId, deliveryLoc);
-
+            // 주문자 찾기
             auto ordererIt = find_if(orderers.begin(), orderers.end(), [&](const Orderer& o) {
                 return o.getId() == ordererId;
             });
-            if (ordererIt != orderers.end()) {
-                order->setOrderer(&(*ordererIt));
+            
+            if (ordererIt == orderers.end()) {
+                cout << "주문자 ID " << ordererId << "를 찾을 수 없습니다." << endl;
+                continue;
             }
+
+            // 배달 위치는 주문자의 위치
+            Location deliveryLoc = ordererIt->getLocation();
+            
+            int orderId = nextOrderId++;
+            Order* order = new Order(orderId, ordererId, storeId, deliveryLoc);
+            order->setOrderer(&(*ordererIt));
 
             auto storeIt = find_if(stores.begin(), stores.end(), [&](const Store& s) {
                 return s.getId() == storeId;
@@ -271,6 +277,10 @@ void Simulator::simulateWithUserInput() {
                 double distance = storeIt->getLocation().calculateDistance(deliveryLoc);
                 double deliveryFee = distance * storeIt->getFeePerDistance();
                 order->setDeliveryFee(deliveryFee);
+            } else {
+                cout << "매장 ID " << storeId << "를 찾을 수 없습니다." << endl;
+                delete order;
+                continue;
             }
 
             scheduledOrders.push_back(OrderSchedule(order, orderTime));
@@ -278,7 +288,7 @@ void Simulator::simulateWithUserInput() {
             cout << "[주문 추가] 주문 ID: " << orderId
                  << ", 주문자 ID: " << ordererId
                  << ", 매장 ID: " << storeId
-                 << ", 배달 위치: (" << x << ", " << y << ")"
+                 << ", 배달 위치: (" << deliveryLoc.getX() << ", " << deliveryLoc.getY() << ")"
                  << ", 주문 시간: " << orderTime << "초"
                  << ", 배달비: " << (int)order->getDeliveryFee() << "원" << endl;
 
@@ -399,38 +409,29 @@ void Simulator::simulateWithUserInput() {
 
             for (int i = 0; i < n; i++) {
                 int orderId = nextOrderId++;
-                int ordererId = orderers[ordererDis(gen)].getId();
-                int storeId = stores[storeDis(gen)].getId();
-                int x = generateRandomCoordinate(0, 100);
-                int y = generateRandomCoordinate(0, 100);
+                int ordererIdx = ordererDis(gen);
+                int storeIdx = storeDis(gen);
+                int ordererId = orderers[ordererIdx].getId();
+                int storeId = stores[storeIdx].getId();
                 int orderTime = generateRandomOrderTime();
 
-                Location deliveryLoc(x, y);
+                // 배달 위치는 주문자의 위치
+                Location deliveryLoc = orderers[ordererIdx].getLocation();
                 Order* order = new Order(orderId, ordererId, storeId, deliveryLoc);
 
-                auto ordererIt = find_if(orderers.begin(), orderers.end(), [&](const Orderer& o) {
-                    return o.getId() == ordererId;
-                });
-                if (ordererIt != orderers.end()) {
-                    order->setOrderer(&(*ordererIt));
-                }
+                order->setOrderer(&orderers[ordererIdx]);
 
-                auto storeIt = find_if(stores.begin(), stores.end(), [&](const Store& s) {
-                    return s.getId() == storeId;
-                });
-                if (storeIt != stores.end()) {
-                    order->setStore(&(*storeIt));
-                    // 배달비 계산
-                    double distance = storeIt->getLocation().calculateDistance(deliveryLoc);
-                    double deliveryFee = distance * storeIt->getFeePerDistance();
-                    order->setDeliveryFee(deliveryFee);
-                }
+                // 배달비 계산
+                double distance = stores[storeIdx].getLocation().calculateDistance(deliveryLoc);
+                double deliveryFee = distance * stores[storeIdx].getFeePerDistance();
+                order->setDeliveryFee(deliveryFee);
+                order->setStore(&stores[storeIdx]);
 
                 scheduledOrders.push_back(OrderSchedule(order, orderTime));
                 cout << "  주문 ID: " << orderId
                      << ", 주문자 ID: " << ordererId
                      << ", 매장 ID: " << storeId
-                     << ", 배달 위치: (" << x << ", " << y << ")"
+                     << ", 배달 위치: (" << deliveryLoc.getX() << ", " << deliveryLoc.getY() << ")"
                      << ", 주문 시간: " << orderTime << "초"
                      << ", 배달비: " << (int)order->getDeliveryFee() << "원" << endl;
             }
@@ -517,45 +518,29 @@ void Simulator::simulateWithUserInput() {
 
             for (int i = 0; i < nOrders; i++) {
                 int orderId = nextOrderId++;
-                int ordererId = orderers[ordererDis(gen)].getId();
-                int storeId = stores[storeDis(gen)].getId();
-                int x = generateRandomCoordinate(0, 100);
-                int y = generateRandomCoordinate(0, 100);
-
-                Location deliveryLoc(x, y);
-                Order* order = new Order(orderId, ordererId, storeId, deliveryLoc);
-
-                auto ordererIt = find_if(orderers.begin(), orderers.end(), [&](const Orderer& o) {
-                    return o.getId() == ordererId;
-                });
-                if (ordererIt != orderers.end()) {
-                    order->setOrderer(&(*ordererIt));
-                }
-
-                auto storeIt = find_if(stores.begin(), stores.end(), [&](const Store& s) {
-                    return s.getId() == storeId;
-                });
-                if (storeIt != stores.end()) {
-                    order->setStore(&(*storeIt));
-                }
-
+                int ordererIdx = ordererDis(gen);
+                int storeIdx = storeDis(gen);
+                int ordererId = orderers[ordererIdx].getId();
+                int storeId = stores[storeIdx].getId();
                 int orderTime = generateRandomOrderTime();
 
+                // 배달 위치는 주문자의 위치
+                Location deliveryLoc = orderers[ordererIdx].getLocation();
+                Order* order = new Order(orderId, ordererId, storeId, deliveryLoc);
+
+                order->setOrderer(&orderers[ordererIdx]);
+                order->setStore(&stores[storeIdx]);
+
                 // 배달비 계산
-                auto storeIt2 = find_if(stores.begin(), stores.end(), [&](const Store& s) {
-                    return s.getId() == storeId;
-                });
-                if (storeIt2 != stores.end()) {
-                    double distance = storeIt2->getLocation().calculateDistance(deliveryLoc);
-                    double deliveryFee = distance * storeIt2->getFeePerDistance();
-                    order->setDeliveryFee(deliveryFee);
-                }
+                double distance = stores[storeIdx].getLocation().calculateDistance(deliveryLoc);
+                double deliveryFee = distance * stores[storeIdx].getFeePerDistance();
+                order->setDeliveryFee(deliveryFee);
 
                 scheduledOrders.push_back(OrderSchedule(order, orderTime));
                 cout << "  주문 ID: " << orderId
                      << ", 주문자 ID: " << ordererId
                      << ", 매장 ID: " << storeId
-                     << ", 배달 위치: (" << x << ", " << y << ")"
+                     << ", 배달 위치: (" << deliveryLoc.getX() << ", " << deliveryLoc.getY() << ")"
                      << ", 주문 시간: " << orderTime << "초"
                      << ", 배달비: " << (int)order->getDeliveryFee() << "원" << endl;
             }
@@ -1131,8 +1116,8 @@ void Simulator::printHelp() {
     cout << "    - 기사를 추가합니다. (ID는 자동 생성)" << endl;
     cout << "  add_store <name> <x> <y> [feePerDistance]" << endl;
     cout << "    - 매장을 추가합니다. (ID는 자동 생성, 배달 단가 기본값: 200원/거리)" << endl;
-    cout << "  add_order <ordererId> <storeId> <deliveryX> <deliveryY> [orderTime]" << endl;
-    cout << "    - 주문을 추가합니다. (주문 ID는 자동 생성, 주문 시간 옵션)" << endl;
+    cout << "  add_order <ordererId> <storeId> [orderTime]" << endl;
+    cout << "    - 주문을 추가합니다. (배달 위치는 주문자 위치, 주문 ID는 자동 생성, 주문 시간 옵션)" << endl;
     cout << "  add_orderer_random <n>" << endl;
     cout << "    - n개의 주문자를 랜덤으로 추가합니다." << endl;
     cout << "  add_driver_random <n>" << endl;
