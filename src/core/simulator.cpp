@@ -1312,12 +1312,14 @@ void Simulator::listOrders() {
     printSeparator();
 }
 
- void Simulator::visualize(const map<int, Location>& driverLocations,
-                             const vector<Orderer>& orderers,
-                             const vector<Store>& stores) {
-    
+void Simulator::visualize(const map<int, Location>& driverLocations,
+                          const vector<Orderer>& orderers,
+                          const vector<Store>& stores) {
+
+    int print_size = 100; 
     vector<vector<char>> mapGrid(MAP_SIZE, vector<char>(MAP_SIZE, EMPTY_SYMBOL));
     
+    // 1. 매장 배치
     for (const Store& store : stores) {
         int x = store.getLocation().getX();
         int y = store.getLocation().getY();
@@ -1326,6 +1328,7 @@ void Simulator::listOrders() {
         }
     }
 
+    // 2. 주문자 배치
     for (const Orderer& orderer : orderers) {
         int x = orderer.getLocation().getX();
         int y = orderer.getLocation().getY();
@@ -1336,30 +1339,30 @@ void Simulator::listOrders() {
         }
     }
     
+    // 3. 기사 배치 (겹침 처리)
     for (const auto& pair : driverLocations) {
         Location loc = pair.second;
         int x = loc.getX();
         int y = loc.getY();
         if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
-            mapGrid[y][x] = DRIVER_SYMBOL;
+             if (mapGrid[y][x] == STORE_SYMBOL) mapGrid[y][x] = '*'; 
+             else if (mapGrid[y][x] == ORDER_DEST_SYMBOL) mapGrid[y][x] = '#'; 
+             else if (mapGrid[y][x] == DRIVER_SYMBOL) mapGrid[y][x] = '%'; 
+             else mapGrid[y][x] = DRIVER_SYMBOL;
         }
     }
 
-    cout << "\n============================== 맵 시각화 (0,0) ~ (" << MAP_SIZE-1 << "," << MAP_SIZE-1 << ") ==============================" << endl;
-    cout << "범례: " << DRIVER_SYMBOL << " 기사, " << STORE_SYMBOL << " 매장, " << ORDER_DEST_SYMBOL << " 주문자/도착지, " << EMPTY_SYMBOL << " 빈 공간" << endl;
+    cout << "\n============================== 맵 시각화 (100x100) ==============================" << endl;
+    cout << "범례: " << DRIVER_SYMBOL << " 기사, " << STORE_SYMBOL << " 매장, " << ORDER_DEST_SYMBOL << " 주문자, * 픽업, # 배달, % 겹침" << endl;
     
-    int print_size = min((int)MAP_SIZE, (int)MAX_PRINT_COORD);
-
-    for (int y = print_size - 1; y >= 0; --y) { 
-        
-        for (int x = 0; x < print_size; ++x) { 
+    for (int y = print_size - 1; y >= 0; --y) {
+        for (int x = 0; x < print_size; ++x) {
             cout << mapGrid[y][x] << " ";
         }
-        if (MAP_SIZE > print_size) cout << "...";
         cout << endl;
     }
-    
-    cout << "==================================================================================" << endl;
+    cout << "    "; 
+    cout << endl << endl;
+    cout << "=================================================================================" << endl;
 }
-
 
