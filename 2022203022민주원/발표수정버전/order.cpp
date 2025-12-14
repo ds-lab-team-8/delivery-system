@@ -1,0 +1,92 @@
+#include "order.h"
+#include "orderer.h"
+#include "store.h"
+
+// Constructor
+Order::Order(int orderId_in, int ordererId_in, int storeId_in)
+    :orderId(orderId_in),
+    ordererId(ordererId_in),
+    storeId(storeId_in),
+    driverId(-1), // 기사 배정 전 -> -1로 초기화
+    status(ORDER_REQUESTED),
+    deliveryFee(0.0),
+    orderer(nullptr),
+    store(nullptr) {
+}
+
+//Destructor
+Order::~Order() {
+
+}
+
+//Getter
+int Order::getOrderId() const {
+    return orderId;
+}
+
+int Order::getOrdererId() const {
+    return ordererId;
+}
+
+int Order::getStoreId() const {
+    return storeId;
+}
+
+int Order::getDriverId() const {
+    return driverId;
+}
+
+
+
+OrderStatus Order::getStatus() const {
+    return status;
+}
+
+double Order::getDeliveryFee() const {
+    return deliveryFee;
+}
+
+const Orderer* Order::getOrderer() const {
+    return orderer;
+}
+
+const Store* Order::getStore() const {
+    return store;
+}
+
+void Order::setDeliveryFee(double fee) {
+    deliveryFee = fee;
+}
+
+// Setters
+void Order::setOrderer(const Orderer* orderer_in) {
+    orderer = orderer_in;
+}
+
+void Order::setStore(const Store* store_in) {
+    store = store_in;
+}
+
+
+// Order status management
+void Order::acceptOrder() {
+    status = ORDER_ACCEPTED;
+}
+
+void Order::assignDriver(int driverId_in) {
+    driverId = driverId_in;
+    status = DRIVER_CALL_ACCEPTED;
+}
+
+void Order::completePickup() {
+    status = PICKUP_COMPLETE;
+}
+
+void Order::completeDelivery() {
+    status = DELIVERY_COMPLETE;
+}
+
+//Utility methods
+bool Order::isDeliveryCompleted() const {
+    return (status == DELIVERY_COMPLETE);
+}
