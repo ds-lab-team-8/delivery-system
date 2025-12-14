@@ -1,61 +1,134 @@
-#ifndef DELIVERY_SYSTEM_H
-#define DELIVERY_SYSTEM_H
-
-#include <iostream>
+#include <queue>
+#include <set>
 #include <vector>
-#include "map.h"
-#include "orderer.h"
-#include "driver.h"
-#include "store.h"
-#include "order.h"
+#include <utility>
+#include <algorithm>
+#include <numeric>
+#include <limits>
+#include "delivery_system_with_drivercall.h"
 
 using namespace std;
 
-class DeliverySystem {
-public:
-    DeliverySystem();
-    virtual ~DeliverySystem();
+DeliverySystemWithDriverCall::DeliverySystemWithDriverCall() : DeliverySystem() {}
 
-    // 초기화 단계의 메서드들
-    void addOrderer(const Orderer& orderer);
-    void addStore(const Store& store);
-    void addDriver(Driver& driver);
-    void addOrder(const Order& order);
+DeliverySystemWithDriverCall::~DeliverySystemWithDriverCall() = default;
 
-    // 배차 및 주문 처리 단계의 메서드들
-    // void requestCallsToDrivers();   // 현재 orders 내에 있는 모든 주문들을 drivers에게 배차 요청 (driver의 배차 큐에 추가)
-    virtual void acceptCall();   // 특정 주문을 배차 요청에 수락 (driver가 호출)
-    void statusUpdate();          // 주문 상태 업데이트용 메서드 (픽업 완료, 배달 완료 시점 업데이트용)
-    void completePickup(int orderId);   // 특정 주문을 픽업 완료 (주문 상태 변경)
-    void completeDelivery(int orderId);   // 특정 주문을 배달 완료 (주문 상태 변경)
+vector<vector<Order*>> DeliverySystemWithDriverCall::generateOrderCombos(const vector<Order*>&availableOrders, int maxComboSize) {
+    vector<vector<Order*>> combos;
+    int n = availableOrders.size();
+    int maxSize = min(maxComboSize, n);
 
-    // 주문을 시스템 레벨에서 기사에게 원자적으로 할당하는 API
-    bool assignOrderToDriver(Order* order, Driver& driver);
+    for (int size = 1; size <= maxSize; ++size) {
+        vector<int> indices(size);
+        iota(indices.begin(), indices.end(), 0);
 
-    // 시뮬레이터를 위한 조회 메서드
-    vector<Order*>& getAllOrders() { return orders; }
-    void initializeMap(int** arr);
-    void setLimitOrderReceive(int limit);   //driver가 한번에 받을수있는 최대 주문수 설정(최솟값 1,최댓값 3)
-    int getLimitOrderReceive() const { return limitOrderReceive; }  //driver가 한번에 받을수있는 최대 주문수 반환
+        while (true) {
+            vector<Order*> combo;
+            combo.reserve(size);
+            for (int idx : indices) combo.push_back(availableOrders[idx]);
+            combos.push_back(combo);
 
+            int i = size - 1;
+            while (i >= 0 && indices[i] == i + n - size) --i;
+            if (i < 0) break;
+            ++indices[i];
+            for (int j = i + 1; j < size; ++j) indices[j] = indices[j - 1] + 1;
+        }
+    }
+    return combos;
+}
 
-    Map& getMap() { return map; }
-protected:
-    // getters
+double DeliverySystemWithDriverCall::bestDistanceForOrderCombo(const vector<Order*>&orderCombo, const Driver & driver, const Map & map) {
+    struct Node {
+        int orderId;
+        bool isPickup;
+        int node;
+        bool operator<(const Node& other) const {
+            if (orderId != other.orderId) return orderId < other.orderId;
+            return (isPickup && !other.isPickup);
+        }
+    };
 
-    vector<Orderer>& getOrderers() { return orderers; }
-    vector<Driver>& getDrivers() { return drivers; }
-    vector<Store>& getStores() { return stores; }
-    vector<Order*>& getOrders() { return orders; }
+    vector<Node> nodes;
+    for (Order* order : orderCombo) {
+        nodes.push_back({ order->getOrderId(), true,  order->getStore()->getLocation().getNode() });
+        nodes.push_back({ order->getOrderId(), false, order->getOrderer()->getLocation().getNode() });
+    }
 
-private:
-    Map map;
-    vector<Orderer> orderers;
-    vector<Driver> drivers;
-    vector<Store> stores;
-    vector<Order*> orders;
-    int limitOrderReceive = 1; //driver가 한번에 받을수있는 최대 주문수(기본값 1)
-};
+    sort(nodes.begin(), nodes.end());
 
+    double bestDist = numeric_limits<double>::max();
 
-#endif
+    do {
+        bool valid = true;
+        set<int> picked;
+        for (auto& n : nodes) {
+            if (n.isPickup) picked.insert(n.orderId);
+            else if (!picked.count(n.orderId)) { valid = false; break; }
+        }
+        if (!valid) continue;
+
+        double distSum = 0;
+        int cur = driver.getCurrentLocation().getNode();
+        for (auto& n : nodes) {
+            distSum += map.GetMap_cost(cur, n.node);
+            cur = n.node;
+        }
+        bestDist = min(bestDist, distSum);
+
+    } while (next_permutation(nodes.begin(), nodes.end()));
+
+    return bestDist;
+}
+
+double DeliverySystemWithDriverCall::computeEfficiency(const vector<Order*>&group, double totalDist) {
+    double totalFee = 0;
+    for (Order* order : group) {
+        totalFee += order->getDeliveryFee();
+    }
+    return totalFee / totalDist;
+}
+
+void DeliverySystemWithDriverCall::acceptCall() {
+    Map& map = getMap();
+    vector<Driver>& drivers = getDrivers();
+    vector<Order*>& orders = getOrders();
+    int limitOrderReceive = getLimitOrderReceive();
+    set<int> assignedOrderIds;
+
+    for (Driver& driver : drivers) {
+        if (!driver.isAvailable()) continue;
+        vector<Order*> availableOrders;
+
+        for (Order* order : orders) {
+            if (order->getStatus() == ORDER_ACCEPTED && !assignedOrderIds.count(order->getOrderId())) {
+                availableOrders.push_back(order);
+            }
+        }
+
+        if (availableOrders.empty()) continue;
+
+        vector<vector<Order*>> orderCombos = generateOrderCombos(availableOrders, limitOrderReceive);
+        double bestEfficiency = -1.0;
+        vector<Order*> bestGroup;
+        for (const auto& group : orderCombos) {
+            double bestDist = bestDistanceForOrderCombo(group, driver, map);
+            double efficiency = computeEfficiency(group, bestDist);
+            if (efficiency > bestEfficiency) {
+                bestEfficiency = efficiency;
+                bestGroup = group;
+            }
+        }
+
+        for (Order* order : bestGroup) {
+            if (assignedOrderIds.count(order->getOrderId())) continue;
+            if (order->getStatus() != ORDER_ACCEPTED) continue;
+
+            if (assignOrderToDriver(order, driver)) {
+                assignedOrderIds.insert(order->getOrderId());
+            }
+        }
+    }
+
+}
+
