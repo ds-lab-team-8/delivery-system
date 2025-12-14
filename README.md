@@ -22,7 +22,7 @@ make build
 ### 프로젝트 구조
 
 ```
-├── src/                # 프로젝트의 메인 소스 코드 디렉토리 (core/ 엔진, entities/ 엔티티, utils/ 유틸리티 등 포함)
+├── src/                # 프로젝트의 메인 소스 코드 디렉토리
 │   ├── core/
 │   ├── entities/
 │   ├── utils/
